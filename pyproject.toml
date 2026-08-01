@@ -1,3 +1,24 @@
+[project]
+name = "mkpp"
+version = "0.1.0"
+description = "Multiphase KPP (MKPP) Engine"
+authors = [
+    { name = "NOAA OMD", email = "nobody@noaa.gov" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml",
+    "sympy",
+    "jinja2"
+]
+
+[project.scripts]
+mkpp = "mkpp.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["mkpp"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
@@ -22,3 +43,4 @@ addopts = "-ra -q --strict-markers"
 testpaths = [
     "tests/python",
 ]
+pythonpath = ["src"]

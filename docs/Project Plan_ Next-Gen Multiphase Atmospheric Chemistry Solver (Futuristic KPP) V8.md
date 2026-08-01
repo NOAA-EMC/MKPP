@@ -286,6 +286,84 @@ namespace MKPP {
 } // namespace catchem
 \#endif
 
+### **3.4 AOT CLI Contract & Exit Codes**
+
+The compiler is invoked as a standalone, machine-readable command-line tool:
+
+```text
+mkpp compile <mechanism.{yaml,yml,json}> --test-env <environment.{yaml,yml,json}> --out <output-dir> [--strict] [--emit-manifest]
+```
+
+**Required Inputs**
+
+- `<mechanism.{yaml,yml,json}>`: representation-agnostic mechanism definition.
+- `--test-env <environment.{yaml,yml,json}>`: standardized validation environment that accompanies the mechanism.
+- `--out <output-dir>`: writable directory for generated headers and reports.
+
+**Channel Rules**
+
+- `stdout` is reserved for normal progress summaries and machine-readable success output.
+- `stderr` is reserved for validation errors, unsupported schema features, and stiffness diagnostics.
+
+**Exit Code Taxonomy**
+
+- `0`: compilation, validation, and generation succeeded.
+- `1`: validation failure, unsupported chemistry, or unresolvable stiffness detected by the fuzzer.
+- `2`: usage error, missing file, unreadable path, or malformed CLI invocation.
+
+**Determinism Rule**
+
+- Identical inputs and compiler options MUST produce byte-identical generated headers and manifests.
+
+### **3.5 Zero-Copy Fortran Interoperability Wrapper & Interface Schema**
+
+To ensure MKPP can be called from legacy Fortran-based Earth System Models without cross-bus copies, the compiler emits an `extern "C"` interoperability wrapper around the generated solver headers.
+
+**Interface Ownership and Lifetime**
+
+- Host models own the raw concentration and meteorology buffers.
+- The wrapper creates `Kokkos::MemoryUnmanaged` views only for the duration of the call.
+- The wrapper must not allocate replacement buffers or copy host data into temporary scratch storage.
+
+**Array Schema**
+
+- Concentrations: rank-4 array with explicit species and grid dimensions.
+- Meteorology: rank-4 array with explicit forcing dimensions.
+- Cloud liquid water: rank-1 or rank-structured host field passed separately from concentrations.
+- Units: the contract must state canonical units for every field that participates in the solver input.
+
+**Validation Requirements**
+
+- The wrapper validates rank, extent, and unit compatibility before any Kokkos dispatch occurs.
+- A mismatch in shape, units, or ownership expectations fails fast and reports the issue on `stderr`.
+
+### **3.6 Preflight Validation & Consumer Harness Contract**
+
+The build system must validate host integration assumptions before a runtime integration test is considered successful.
+
+**Preflight Checks**
+
+- Confirm the host application exposes a C-compatible entrypoint for the generated wrapper.
+- Confirm cloud liquid water, meteorology, and concentration arrays are present with the expected extents.
+- Confirm the build can link against the generated headers without relying on compiler-specific pragmas or private runtime assumptions.
+
+**Consumer Harness Responsibilities**
+
+- The downstream application must provide the `main` entrypoint and the host-memory buffers required by the generated wrapper.
+- The downstream application must link the generated headers and exercise the emitted solver path with a deterministic test environment.
+- The downstream application must verify at least one forward solve and one adjoint/TLM check against a known perturbation case.
+
+### **3.7 Artifact Provenance & Reproducibility**
+
+The AOT compiler emits a manifest alongside generated headers that records:
+
+- input file digests for the mechanism and test environment,
+- compiler version and generation options,
+- artifact names and relative output paths,
+- schema validation status and any non-fatal warnings.
+
+The manifest itself must remain deterministic for identical inputs and options. If the compiler needs to emit human-oriented timestamps, those must be confined to separate logs and not embedded in the generated headers or the machine-readable manifest.
+
 ## ---
 
 **4\. 18-Month Implementation Roadmap & WBS**

@@ -67,8 +67,9 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] T005 [P] Implement authentication/authorization framework
 - [ ] T006 [P] Setup API routing and middleware structure
 - [ ] T007 Create base models/entities that all stories depend on
-- [ ] T008 Configure error handling and logging infrastructure
-- [ ] T009 Setup environment configuration management
+- [ ] T008 Configure error handling and logging infrastructure (No PII)
+- [ ] T009 Setup environment configuration management (No hardcoded secrets)
+- [ ] T009b Configure MPI Communicators and Kokkos Execution Spaces
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -147,15 +148,18 @@ Examples of foundational tasks (adjust based on your project):
 
 ---
 
-## Phase N: Polish & Cross-Cutting Concerns
+## Phase N: Polish, Compliance & Cross-Cutting Concerns
 
 **Purpose**: Improvements that affect multiple user stories
 
 - [ ] TXXX [P] Documentation updates in docs/
-- [ ] TXXX Code cleanup and refactoring
+- [ ] TXXX Code cleanup and refactoring (Clarity Over Cleverness)
+- [ ] TXXX Verify EE2 CI/CD Gates (Static analysis, testing, approved paths)
+- [ ] TXXX Verify MPI / Kokkos memory access patterns and load balancing
+- [ ] TXXX Verify Zero-Copy Data Interoperability (mdspan / LayoutLeft)
 - [ ] TXXX Performance optimization across all stories
 - [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
-- [ ] TXXX Security hardening
+- [ ] TXXX Security hardening (Path sanitization, check for secrets)
 - [ ] TXXX Run quickstart.md validation
 
 ---

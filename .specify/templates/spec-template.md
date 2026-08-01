@@ -85,6 +85,13 @@
   Fill them out with the right functional requirements.
 -->
 
+### Core Constitution Constraints
+
+- **CON-001**: System MUST ensure path sanitization and avoid hardcoded secrets.
+- **CON-002**: System MUST guarantee scientific determinism (no unseeded randoms).
+- **CON-003**: System MUST NOT gather multidimensional grid data onto a single root rank.
+- **CON-004**: System MUST evaluate kinetics without operator splitting (Unified Jacobian).
+
 ### Functional Requirements
 
 - **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]

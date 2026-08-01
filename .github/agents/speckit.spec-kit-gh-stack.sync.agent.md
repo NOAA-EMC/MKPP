@@ -1,0 +1,1 @@
+../../.specify/extensions/spec-kit-gh-stack/.specify-dev/agent-commands/copilot/speckit.spec-kit-gh-stack.sync.agent.md

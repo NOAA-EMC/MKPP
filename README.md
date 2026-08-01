@@ -1,19 +1,25 @@
-# EMC Repository Template
+# FKPP (Futuristic Kinetic PreProcessor)
 
-Getting all the right files in the right place can be a pain. 
-This is a simple template repository that you can use to ensure you have all the right files present in your repo.
+Development of the Futuristic Kinetic PreProcessor (FKPP), shifting overhead to an Ahead-Of-Time (AOT) Python compiler emitting block-sparse Kokkos C++ headers for a Unified Jacobian.
 
-## Files you need
+## NOAA NWS Office of Modeling and Development
 
-These should be at the top level of your repository:
+To design, build, integrate, and optimize robust scientific software, high-performance computing (HPC) software pipelines, and numerical weather prediction (NWP) systems that protect life and property.
 
-* `README.md` - The `README.md` file should have a short section at the bottom
-  called "DISCLAIMER", with a really brief statement saying that code is provided on an "as is" basis, and the user assumes responsibility for its use.
-* `LICENSE` - The text of the `CC0` license.
-* `DISCLAIMER` - Disclaimer 
-   
+## Governance
+
+Development on this project is governed by the [FKPP Constitution](.specify/memory/constitution.md). All contributors must adhere to its core principles including:
+- Clarity Over Cleverness
+- Defensive Programming
+- Fail Fast, Fail Loudly
+- High-Performance Computing & Message Passing (MPI) considerations
+- GPU Acceleration & Kokkos constraints
+- Zero-Copy Data Interoperability
+- Scientific Hygiene & Determinism
+
+See the Constitution and `.github/copilot-instructions.md` for complete guidelines.
+
 ## License
 
 This project is part of NOAA-EMC Ecosystem. 
-
 See LICENSE and DISCLAIMER for details.

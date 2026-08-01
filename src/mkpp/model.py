@@ -1,0 +1,71 @@
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional
+from enum import Enum
+
+class PhaseMode(Enum):
+    GAS = "gas"
+    AEROSOL = "aerosol"
+    AQUEOUS = "aqueous"
+    MIXED = "mixed"
+
+class SolverMode(Enum):
+    IMPLICIT = "implicit"
+    EXPLICIT = "explicit"
+    COUPLED = "coupled"
+
+class AerosolRepresentation(Enum):
+    BULK = "bulk"
+    MODAL = "modal"
+    SECTIONAL = "sectional"
+
+@dataclass
+class SpeciesDefinition:
+    name: str
+    phase: PhaseMode
+    elements: Dict[str, int] = field(default_factory=dict)
+    role: Optional[str] = None
+
+@dataclass
+class PhaseDefinition:
+    name: str
+    solver_mode: SolverMode
+    transport_model: Optional[str] = None
+    continuity_model: Optional[str] = None
+
+@dataclass
+class ReactionDefinition:
+    reaction_type: str
+    reactants: List[str]
+    products: List[str]
+    rate_expression: str
+    unit_policy: str = "canonical"
+    stiff: bool = False
+    continuous_transition: bool = False
+
+@dataclass
+class MechanismDefinition:
+    name: str
+    description: str
+    aerosol_representation: AerosolRepresentation
+    species: List[SpeciesDefinition]
+    phases: List[PhaseDefinition]
+    reactions: List[ReactionDefinition]
+    units: str = "canonical"
+    metadata: Dict[str, str] = field(default_factory=dict)
+
+@dataclass
+class TestEnvironmentDefinition:
+    name: str
+    initial_conditions: Dict[str, float]
+    meteorology: Dict[str, float]
+    photolysis: Dict[str, float]
+    cloud_liquid_water: float
+    bounds: Dict[str, Dict[str, float]]
+    expected_outputs: Optional[Dict[str, float]] = None
+
+@dataclass
+class GeneratedArtifact:
+    kind: str
+    path: str
+    dependencies: List[str]
+    checksum: Optional[str] = None

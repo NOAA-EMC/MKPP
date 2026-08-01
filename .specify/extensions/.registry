@@ -1,21 +1,6 @@
 {
   "schema_version": "1.0",
   "extensions": {
-    "red-team": {
-      "version": "1.0.2",
-      "source": "local",
-      "manifest_hash": "sha256:5bdd672fbde76cd960fb794b4544d49bd0b8bcdca053e04d85c405538e0b7c75",
-      "enabled": true,
-      "priority": 10,
-      "registered_commands": {
-        "gemini": [
-          "speckit.red-team.run",
-          "speckit.red-team.gate"
-        ]
-      },
-      "registered_skills": [],
-      "installed_at": "2026-07-31T15:21:36.660981+00:00"
-    },
     "diagram": {
       "version": "1.0.0",
       "source": "local",
@@ -31,6 +16,75 @@
       },
       "registered_skills": [],
       "installed_at": "2026-07-31T15:23:11.704842+00:00"
+    },
+    "red-team": {
+      "version": "1.0.2",
+      "source": "local",
+      "manifest_hash": "sha256:5bdd672fbde76cd960fb794b4544d49bd0b8bcdca053e04d85c405538e0b7c75",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "copilot": [
+          "speckit.red-team.run",
+          "speckit.red-team.gate"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-07-31T17:15:18.019033+00:00"
+    },
+    "superspec": {
+      "version": "1.0.1",
+      "source": "local",
+      "manifest_hash": "sha256:6ff197d827bfeb39eefb659d148628a40c3220cfd7d2a36ac625b2f8194bd21b",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "copilot": [
+          "speckit.superspec.status",
+          "speckit.superspec.brainstorm",
+          "speckit.superspec.tasks",
+          "speckit.superspec.execute",
+          "speckit.superspec.review"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-07-31T17:23:21.697847+00:00"
+    },
+    "spec-kit-gh-stack": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:a62ea712e36d63150d8ff512136650382d97f12a4ab6c0d087d7de48d56e6bbc",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "copilot": [
+          "speckit.spec-kit-gh-stack.init",
+          "speckit.spec-kit-gh-stack.execute",
+          "speckit.spec-kit-gh-stack.submit",
+          "speckit.spec-kit-gh-stack.sync",
+          "speckit.spec-kit-gh-stack.patch"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-08-01T10:28:13.390322+00:00"
+    },
+    "stack": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:b35c8b8d365d51d4040c6248c4494357485d1d24868b1af7a6959225715f8262",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "copilot": [
+          "speckit.stack.init",
+          "speckit.stack.execute",
+          "speckit.stack.submit",
+          "speckit.stack.sync",
+          "speckit.stack.patch"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-08-01T10:29:39.896065+00:00"
     }
   }
 }

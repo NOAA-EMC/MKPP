@@ -40,7 +40,10 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- [ ] **Clarity & Defensive Programming**: Does the plan ensure clear syntax, validation of inputs, and immediate execution breaks on structural failures?
+- [ ] **MPI & Kokkos Alignment**: Does the plan account for proper communicator awareness, prevent multi-node data aggregation, and avoid warp divergence in GPU kernels?
+- [ ] **Zero-Copy & Determinism**: Does the plan specify `std::mdspan` with `std::layout_left` for cross-language sharing, and eliminate non-deterministic algorithms?
+- [ ] **EE2 & CI/CD**: Does the plan include testing, linting, and environment validation gates before deployment? No hardcoded secrets?
 
 ## Project Structure
 

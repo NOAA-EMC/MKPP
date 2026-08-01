@@ -1,0 +1,36 @@
+version: "v1"
+
+defaults:
+  finding_bound: 5
+  severity_weight: 5
+
+lenses:
+  - name: "Interface Contract Adversary"
+    description: "Attacks the spec as if every upstream/downstream interface will be used in the least forgiving way."
+    core_questions:
+      - "Which inputs, outputs, or CLI flags are underspecified and could be interpreted in conflicting ways?"
+      - "Where does the spec rely on implied behavior instead of an explicit contract?"
+      - "What downstream consumer would break if the input schema changes slightly?"
+    trigger_match: [contracts]
+    severity_weight: 8
+    finding_bound: 5
+
+  - name: "Trust Boundary Adversary"
+    description: "Attacks assumptions at the boundary between scientist, build system, host model, and generated artifacts."
+    core_questions:
+      - "Which actor is trusted without a validation step, and what happens if that trust is wrong?"
+      - "Where can a lower-privilege or less-informed actor bypass an intended gate?"
+      - "What contract boundary is being stretched across multiple human roles without explicit ownership?"
+    trigger_match: [multi_party, contracts]
+    severity_weight: 7
+    finding_bound: 5
+
+  - name: "Artifact Integrity Adversary"
+    description: "Attacks the artifact lifecycle for drift, ambiguity, and accidental coupling between generated files and the source spec."
+    core_questions:
+      - "Which generated artifact is likely to drift from the spec because the relationship is not stated precisely enough?"
+      - "What output would a downstream build system assume exists but the spec does not guarantee?"
+      - "Where are determinism or reproducibility guarantees implied instead of enforced?"
+    trigger_match: [contracts]
+    severity_weight: 6
+    finding_bound: 5
