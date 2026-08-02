@@ -12,7 +12,7 @@ def parse_spc(filepath):
     for line in content.split('\n'):
         line = line.strip()
         if not line or line.startswith('#'): continue
-        if '=' in line and ';' in line and ('IGNORE' in line or 'H' in line or 'O' in line or 'C' in line):
+        if '=' in line and ';' in line and ('IGNORE' in line.upper() or 'H' in line.upper() or 'O' in line.upper() or 'C' in line.upper() or 'N' in line.upper() or 'S' in line.upper()):
             sp_name = line.split('=')[0].strip()
             species.append({"name": sp_name})
     return species
@@ -22,6 +22,8 @@ def parse_eqn(filepath):
     with open(filepath, 'r') as f:
         # Strip newlines and spaces that break line parsing
         content = f.read().replace('\\\n', '')
+        # KPP equation bodies can span multiple lines before the rate expression semicolon
+        content = re.sub(r'\n\s+', ' ', content)
 
     for line in content.split('\n'):
         line = line.strip()
@@ -95,6 +97,35 @@ def parse_eqn(filepath):
                         rxn["A"] = args[0].strip().replace("e0", "")
                         rxn["C"] = args[1].strip().replace("e0", "")
                         rxn["B"] = args[2].strip().replace("e0", "")
+                elif rate_str.startswith("FALL("):
+                    args = rate_str.replace("FALL(", "").replace(")", "").split(",")
+                    if len(args) >= 7:
+                        rxn["type"] = "TROE"
+                        rxn["k0_A"] = args[0].strip().replace("e0", "")
+                        rxn["k0_B"] = args[1].strip().replace("e0", "")
+                        rxn["k0_C"] = args[2].strip().replace("e0", "")
+                        rxn["kinf_A"] = args[3].strip().replace("e0", "")
+                        rxn["kinf_B"] = args[4].strip().replace("e0", "")
+                        rxn["kinf_C"] = args[5].strip().replace("e0", "")
+                        rxn["Fc"] = args[6].strip().replace("e0", "")
+                elif rate_str.startswith("EP2("):
+                    args = rate_str.replace("EP2(", "").replace(")", "").split(",")
+                    if len(args) >= 6:
+                        rxn["type"] = "EP2"
+                        rxn["A0"] = args[0].strip().replace("e0", "")
+                        rxn["C0"] = args[1].strip().replace("e0", "")
+                        rxn["A2"] = args[2].strip().replace("e0", "")
+                        rxn["C2"] = args[3].strip().replace("e0", "")
+                        rxn["A3"] = args[4].strip().replace("e0", "")
+                        rxn["C3"] = args[5].strip().replace("e0", "")
+                elif rate_str.startswith("EP3("):
+                    args = rate_str.replace("EP3(", "").replace(")", "").split(",")
+                    if len(args) >= 4:
+                        rxn["type"] = "EP3"
+                        rxn["A1"] = args[0].strip().replace("e0", "")
+                        rxn["C1"] = args[1].strip().replace("e0", "")
+                        rxn["A2"] = args[2].strip().replace("e0", "")
+                        rxn["C2"] = args[3].strip().replace("e0", "")
                 elif rate_str.startswith("("):
                     rxn["A"] = rate_str.replace("(", "").replace(")", "").replace("e0", "")
                 else:

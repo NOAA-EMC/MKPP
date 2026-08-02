@@ -44,7 +44,7 @@ class PhaseDefinition:
 
 @dataclass
 class ReactionDefinition:
-    reaction_type: str  # e.g., ARRHENIUS, PHOTOLYSIS
+    reaction_type: str  # e.g., ARRHENIUS, PHOTOLYSIS, TROE, EP2, EP3
     reactants: Dict[str, float]
     products: Dict[str, float]
     rate_expression: str
