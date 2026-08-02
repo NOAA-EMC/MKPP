@@ -22,7 +22,7 @@
   "solver_partition": {
     "sza_sorted": true,
     "micro_blocks": {
-      "implicit": 194,
+      "implicit": 200,
       "explicit": 1
     },
     "scc_count": 1

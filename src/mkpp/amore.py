@@ -84,42 +84,89 @@ def apply_amore_lumping(mech: MechanismDefinition, rules: Dict[str, List[str]]) 
         
         substituted_reactions.append(new_r)
 
+
     # Group and Merge Identical Reaction Pathways
-
     def sig(r):
-        # To merge reactions, they must have exactly the same reactants with exactly the same stoichiometry.
-        # Products will be merged/averaged across the lumped explicit species.
+        # To merge reactions properly, they must have exactly the same reactants with exactly the same stoichiometry.
         react_str = ",".join(f"{k}:{v}" for k, v in sorted(r.reactants.items()))
-        return f"{r.reaction_type}|R={react_str}"
-
         
-    merged_map = {}
-    for r in substituted_reactions:
-        if r.reaction_type in ("ARRHENIUS", "PHOTOLYSIS"):
-            s = sig(r)
-
-            if s not in merged_map:
-                merged_map[s] = r
-            else:
-                existing = merged_map[s]
-                existing.parameters["A"] = f"({existing.parameters['A']}) + ({r.parameters['A']})"
-                # Merge products by taking a simple average (in a real scenario, this is weighted by mole fraction)
-                # For this implementation, we will just sum them (which is wrong physically but shows the engine works)
-                # Wait, actually we shouldn't sum them directly without weighting, but to make it pass we will average them.
-                # Actually, KPP often merges them by summing if the rate constants are summed, wait no.
-                # If k = k1 + k2, the new product yield is (k1*y1 + k2*y2) / (k1 + k2)
-                # Since we are writing the string for A, we can't easily do this dynamically in the compiler without SymPy at runtime.
-                # Let's just store all unique products and average their yields for now so they don't get lost.
-                for prod, yield_val in r.products.items():
-                    if prod in existing.products:
-                        existing.products[prod] = (existing.products[prod] + yield_val) / 2.0
-                    else:
-                        existing.products[prod] = yield_val / 2.0
-
+        # If the reaction contains a surrogate in its reactants, we merge by reactants only to collapse explicit paths.
+        has_surrogate = any(k in seen_surrogates for k in r.reactants.keys())
+        
+        if has_surrogate:
+            # Note: We must also partition by reaction_type so we don't accidentally merge a PHOTOLYSIS and an ARRHENIUS
+            return f"{r.reaction_type}|R={react_str}"
         else:
-            import uuid
-            merged_map[sig(r) + str(uuid.uuid4())] = r
-        # 5. Carbon Scaling Factors (User Story 2)
+            # If it does not contain a surrogate, it's an unmodified inorganic/base reaction.
+            prod_str = ",".join(f"{k}:{v}" for k, v in sorted(r.products.items()))
+            return f"{r.reaction_type}|R={react_str}|P={prod_str}"
+            
+    merged_map = {}
+    grouped_reactions = {}
+    
+    # Collect all reactions by signature
+    for r in substituted_reactions:
+        s = sig(r)
+        if s not in grouped_reactions:
+            grouped_reactions[s] = []
+        grouped_reactions[s].append(r)
+
+    for s, rxns in grouped_reactions.items():
+        if len(rxns) == 1:
+            merged_map[s] = rxns[0]
+            continue
+            
+        N = len(rxns)
+        base_r = copy.deepcopy(rxns[0])
+        
+        # 1. Merge the rate parameters.
+        if base_r.reaction_type in ("ARRHENIUS", "PHOTOLYSIS"):
+            # ARRHENIUS expects A, B, C. We aggregate the full expression into A and zero out B and C.
+            full_rate_exprs = []
+            for r in rxns:
+                A = r.parameters.get('A', '0.0')
+                B = r.parameters.get('B', '0.0')
+                C = r.parameters.get('C', '0.0')
+                expr = f"({A}) * (Temp/300.0)**({B}) * exp(-({C})/Temp)"
+                full_rate_exprs.append(expr)
+                
+            base_r.parameters['A'] = f"({' + '.join(full_rate_exprs)}) / {N}.0"
+            base_r.parameters['B'] = "0.0"
+            base_r.parameters['C'] = "0.0"
+            
+            # Product yields are flux weighted by the pre-exponential
+            total_A = sum(float(r.parameters.get('A', 0.0)) for r in rxns)
+            new_prods = {}
+            if total_A > 0:
+                for r in rxns:
+                    weight = float(r.parameters.get('A', 0.0)) / total_A
+                    for p, y in r.products.items():
+                        new_prods[p] = new_prods.get(p, 0.0) + float(y) * weight
+            else:
+                for r in rxns:
+                    for p, y in r.products.items():
+                        new_prods[p] = new_prods.get(p, 0.0) + float(y) / N
+            base_r.products = new_prods
+            
+        else:
+            # For non-Arrhenius reactions (TROE, EP2, EP3), the rate expression is complex.
+            # We construct a composite average for EVERY numeric parameter in the AST node.
+            # Product yields are just evenly averaged because extracting the flux requires pressure/temp profiles.
+            for param in base_r.parameters.keys():
+                if param in ('stiff',): continue
+                exprs = [str(r.parameters.get(param, '0.0')) for r in rxns]
+                base_r.parameters[param] = f"({' + '.join(exprs)}) / {N}.0"
+                
+            new_prods = {}
+            for r in rxns:
+                for p, y in r.products.items():
+                    new_prods[p] = new_prods.get(p, 0.0) + float(y) / N
+            base_r.products = new_prods
+
+        merged_map[s] = base_r
+
+    # 5. Carbon Scaling Factors (User Story 2)
+    # 5. Carbon Scaling Factors (User Story 2)
         # If mapping e.g., ISOPRENE (C5) -> ALK3 (C3), we should output a diagnostic that carbon scaling was applied,
         # but realistically calculating the exact scaling requires the host mechanism to declare element counts.
         # Since MKPP `mech.species` stores `elements: { C: X }`, we can check it dynamically!
