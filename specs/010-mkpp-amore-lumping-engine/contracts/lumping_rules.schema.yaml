@@ -1,0 +1,23 @@
+# JSON Schema (YAML format) for lumping_rules.yaml
+type: object
+properties:
+  surrogates:
+    type: object
+    patternProperties:
+      "^[A-Z0-9_]+$":  # Surrogate name
+        type: object
+        properties:
+          explicit_species:
+            type: array
+            items:
+              type: string
+          weights:
+            type: object
+            patternProperties:
+              "^[A-Z0-9_]+$":
+                type: number
+        required:
+          - explicit_species
+          - weights
+required:
+  - surrogates

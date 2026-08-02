@@ -82,15 +82,22 @@ def write_report(mech, sympy_meta, out_dir, suffix=""):
             f.write("- **Graph Topology Status**: Mechanism contains cyclically dependent fast radicals. Tarjan SCC was applied.\n")
         f.write("\n")
         
-        if hasattr(mech, "reduction_metadata") and mech.reduction_metadata:
-            pruned_species = mech.reduction_metadata["pruned_species"]
-            dropped_rxns = mech.reduction_metadata["dropped_reactions"]
-            f.write("## DRGEP Auto-Reduction Summary\n")
-            f.write(f"- **Species Pruned**: {len(pruned_species)}\n")
-            f.write(f"- **Reactions Dropped**: {len(dropped_rxns)}\n\n")
+        if hasattr(mech, "amore_metadata") and mech.amore_metadata:
+            meta = mech.amore_metadata
+            f.write("## AMORE Auto-Lumping Summary\n")
+            f.write(f"- **Explicit Species Collapsed**: {len(meta['pruned_explicits'])}\n")
+            f.write(f"- **Surrogates Added**: {len(meta['surrogates_added'])}\n")
+            f.write(f"- **Redundant Reactions Merged**: {meta['total_collapsed']}\n\n")
+            f.write("### Target Surrogates\n")
+            f.write(f"{', '.join(meta['surrogates_added'])}\n\n")
             
-            f.write("### Pruned Species\n")
-            f.write(f"The following species were determined to have negligible kinetic impact and were removed: {', '.join(pruned_species)}\n\n")
+            f.write("### Lumping Mapping Table\n")
+            f.write("| Explicit Species | Mapped Surrogate |\n")
+            f.write("|------------------|------------------|\n")
+            for explicit, surrogate in meta.get("mapping", {}).items():
+                if explicit in meta['pruned_explicits']:
+                    f.write(f"| `{explicit}` | `{surrogate}` |\n")
+            f.write("\n")
             
             import yaml
             spc_yaml = out_path / f"species_{mech.name}{suffix}.yaml"
@@ -107,12 +114,49 @@ def write_report(mech, sympy_meta, out_dir, suffix=""):
                 yaml.dump(yaml_data, fy, sort_keys=False)
                 
             f.write(f"### Reduced Mechanism Definitions\n")
-            f.write(f"- Download the reduced species config: [{spc_yaml.name}]({spc_yaml.name})\n")
-            f.write(f"- Download the reduced reactions config: [{rxn_yaml.name}]({rxn_yaml.name})\n\n")
+            f.write(f"- Download the lumped species config: [{spc_yaml.name}]({spc_yaml.name})\n")
+            f.write(f"- Download the lumped reactions config: [{rxn_yaml.name}]({rxn_yaml.name})\n\n")
+
+        if hasattr(mech, "amore_metadata") and mech.amore_metadata:
+            f.write("### Lumped Reaction Parameters\n")
+            f.write("When explicit paths were collapsed, their kinetic parameters were aggregated into the following effective rates ($A_{eff}$):\n\n")
+            f.write("```yaml\n")
+            import yaml
+            surrogates = mech.amore_metadata["surrogates_added"]
+            for rxn in mech.reactions:
+                has_surrogate = False
+                for r in rxn.reactants:
+                    if r in surrogates: has_surrogate = True
+                for p in rxn.products:
+                    if p in surrogates: has_surrogate = True
+                if has_surrogate:
+                    d = {"type": rxn.reaction_type, "reactants": rxn.reactants, "products": rxn.products}
+                    d.update(rxn.parameters)
+                    yaml.dump([d], f, sort_keys=False)
+            f.write("```\n\n")
+        f.write("## Generated SymPy Rate Expressions\n")
+        f.write("Below are the exact algebraic AST expressions evaluated by SymPy for the Unified Jacobian.\n\n")
+        f.write("```text\n")
+        if hasattr(mech, "sympy_reactions_strings"):
+            for i, r_str in enumerate(mech.sympy_reactions_strings):
+                f.write(f"R{i+1}: {r_str}\n")
+        else:
+            for i, r in enumerate(mech.reactions):
+                f.write(f"R{i+1}: {r.reaction_type} | Reactants: {list(r.reactants.keys())} | Products: {list(r.products.keys())} | A: {r.parameters.get('A', 'N/A')}\n")
 
         
-        f.write("## Topology & Graph\n")
-        f.write(f"![Network Graph](network_graph_{mech.name}{suffix}.png)\n\n")
+        if sympy_meta and "f_implicit" in sympy_meta:
+            F_imp = sympy_meta["f_implicit"]
+            F_exp = sympy_meta["f_explicit"]
+            species_list = sympy_meta["species_map"]
+            for i in range(len(F_imp)):
+                f.write(f"d[{species_list[i]}]/dt = (IMPLICIT: {F_imp[i]}) + (EXPLICIT: {F_exp[i]})\n")
+        elif sympy_meta and "f_vector" in sympy_meta:
+            F = sympy_meta["f_vector"]
+            species_list = sympy_meta["species_map"]
+            for i in range(len(F)):
+                f.write(f"d[{species_list[i]}]/dt = {F[i]}\n")
+        f.write("```\n\n")
         
         f.write("## Performance & Stiffness Diagnostics\n")
         if top_dense:
@@ -126,7 +170,7 @@ def write_report(mech, sympy_meta, out_dir, suffix=""):
         f.write("### Warnings\n")
         warnings = []
         if len(mech.species) > 50:
-            warnings.append("Mechanism exceeds 50 species. Consider running with `--enable-drgep` to auto-reduce.")
+            warnings.append("Mechanism exceeds 50 species. Consider running with `--lump` to auto-reduce.")
         if type_counts.get("TROE", 0) > 0 or type_counts.get("EP2", 0) > 0 or type_counts.get("EP3", 0) > 0:
             warnings.append("Mechanism contains complex pressure-dependent or empirical falloff rates which expand the AST depth significantly.")
             

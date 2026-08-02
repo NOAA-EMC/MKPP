@@ -1,6 +1,7 @@
 installed:
 - diagram
 - red-team
+- stack
 settings:
   auto_execute_hooks: true
 hooks:

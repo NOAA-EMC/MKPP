@@ -10,29 +10,7 @@
 
 using ExecSpace = Kokkos::DefaultExecutionSpace;
 
-struct RosenbrockFunctor {
-    mkpp::concentrations_view_t state;
-    
-    RosenbrockFunctor(mkpp::concentrations_view_t s) : state(s) {}
-    
-    KOKKOS_INLINE_FUNCTION
-    void operator()(const Kokkos::TeamPolicy<ExecSpace>::member_type& team) const {
-        int i = team.league_rank();
-        
-        Kokkos::parallel_for(Kokkos::TeamThreadRange(team, 1), [&](const int& s) {
-            mkpp::SolverKernels<ExecSpace> solver;
-            int n_spec = state.extent(1);
-            
-            double flat_state[200] = {0.0};
-            for(int k=0; k<n_spec; k++) flat_state[k] = state(i, k, 0, 0);
-            
-            double dt = 3600.0;
-            solver.integrate(dt, flat_state);
-            
-            for(int k=0; k<n_spec; k++) state(i, k, 0, 0) = flat_state[k];
-        });
-    }
-};
+#include "mkpp_host/dispatcher.hpp"
 
 TEST(E2ESolverValidation, MechanismIntegration) {
     int cells = 1;
@@ -42,9 +20,9 @@ TEST(E2ESolverValidation, MechanismIntegration) {
     // we can pass it via CMake definition `-DNUM_SPECIES_MACRO=` or we can just make it large enough.
     // However, the Kokkos array extent must match. 
     int n_spec = 0;
-#ifdef NUM_SPECIES_MACRO
-    n_spec = NUM_SPECIES_MACRO;
-#endif
+
+    
+
     if(n_spec == 0) n_spec = 100; // fallback, but we will pass it from CMake
     
     std::vector<double> host_data(cells * n_spec * 1 * 1, 0.0);
@@ -56,10 +34,7 @@ TEST(E2ESolverValidation, MechanismIntegration) {
     
     mkpp::concentrations_view_t state(host_data.data(), cells, n_spec, 1, 1);
     
-    Kokkos::parallel_for("Rosenbrock_Team_Dispatch",
-        Kokkos::TeamPolicy<ExecSpace>(cells, Kokkos::AUTO),
-        RosenbrockFunctor(state)
-    );
+    mkpp::host::execute_mechanism<mkpp::SolverKernels<ExecSpace>>(TOSTRING(MECH_HEADER), state, 3600.0);
     Kokkos::fence();
     
     std::ofstream out("e2e_output.csv");
