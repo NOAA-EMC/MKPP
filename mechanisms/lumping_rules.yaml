@@ -1,0 +1,5 @@
+# We want to lump Ethane, Propane, and n-Butane into ALK1
+ALK1_SURR:
+  - ALK1
+  - ALK2
+  - ALK3

@@ -1,0 +1,14 @@
+ALK_SURR:
+  - ALK1
+  - ALK2
+  - ALK3
+  - ALK4
+  - ALK5
+ARO_SURR:
+  - ARO1
+  - ARO2
+OLE_SURR:
+  - OLE1
+  - OLE2
+TERP_SURR:
+  - TERP

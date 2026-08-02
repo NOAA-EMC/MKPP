@@ -1,0 +1,30 @@
+{
+  "mechanism": "saprc99",
+  "aerosol_representation": "bulk",
+  "checksum": "7e83abcf1396431dd70b87dd62d2902db928f41db56b2a5215ebf4e6d710ca8a",
+  "artifacts": [
+    {
+      "kind": "header",
+      "file": "saprc99_lumped.hpp"
+    },
+    {
+      "kind": "adjoint_tlm_record",
+      "differentiable": true
+    }
+  ],
+  "host_interface": {
+    "concentrations": {
+      "rank": 4,
+      "layout": "LayoutLeft",
+      "lifetime": "unmanaged_borrowed_from_host"
+    }
+  },
+  "solver_partition": {
+    "sza_sorted": true,
+    "micro_blocks": {
+      "implicit": 200,
+      "explicit": 1
+    },
+    "scc_count": 1
+  }
+}

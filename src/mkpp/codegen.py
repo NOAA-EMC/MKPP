@@ -48,7 +48,7 @@ def format_eqn(eqn_str, species_list):
     return s
 
 
-def generate_headers(mech: MechanismDefinition, out_dir: str = "build/mkpp-generated") -> Dict[str, str]:
+def generate_headers(mech: MechanismDefinition, out_dir: str = "src/solvers", suffix: str = "") -> Dict[str, str]:
     """Emit the Kokkos headers and manifest artifact."""
     if not mech or not mech.species:
         raise ValueError("Cannot generate headers for empty mechanism")
@@ -57,7 +57,7 @@ def generate_headers(mech: MechanismDefinition, out_dir: str = "build/mkpp-gener
     out_path.mkdir(parents=True, exist_ok=True)
 
     # 1. Deterministic header emission
-    header_path = out_path / f"{mech.name}.hpp"
+    header_path = out_path / f"{mech.name}{suffix}.hpp"
     with open(header_path, 'w') as f:
         f.write("#pragma once\n")
         f.write("#include <Kokkos_Core.hpp>\n")
