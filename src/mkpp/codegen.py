@@ -48,7 +48,7 @@ def format_eqn(eqn_str, species_list):
     return s
 
 
-def generate_headers(mech: MechanismDefinition, out_dir: str = "build/mkpp-generated", suffix: str = "") -> Dict[str, str]:
+def generate_headers(mech: MechanismDefinition, out_dir: str = "src/solvers", suffix: str = "") -> Dict[str, str]:
     """Emit the Kokkos headers and manifest artifact."""
     if not mech or not mech.species:
         raise ValueError("Cannot generate headers for empty mechanism")

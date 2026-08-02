@@ -22,6 +22,8 @@ def parse_eqn(filepath):
     with open(filepath, 'r') as f:
         # Strip newlines and spaces that break line parsing
         content = f.read().replace('\\\n', '')
+        # KPP equation bodies can span multiple lines before the rate expression semicolon
+        content = re.sub(r'\n\s+', ' ', content)
 
     for line in content.split('\n'):
         line = line.strip()

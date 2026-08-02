@@ -1,0 +1,31 @@
+name: LumpingTest
+description: Explicit test mechanism to verify AST lumping.
+species:
+  - name: OH
+  - name: ALK1
+  - name: ALK2
+  - name: ALK3
+  - name: ALK1_SURR
+  - name: PROD
+reactions:
+  - type: ARRHENIUS
+    reactants: {ALK1: 1.0, OH: 1.0}
+    products: {PROD: 1.0}
+    A: 1.0e-12
+    stiff: true
+  - type: ARRHENIUS
+    reactants: {ALK2: 1.0, OH: 1.0}
+    products: {PROD: 1.0}
+    A: 2.0e-12
+    stiff: true
+  - type: ARRHENIUS
+    reactants: {ALK3: 1.0, OH: 1.0}
+    products: {PROD: 1.0}
+    A: 3.0e-12
+    stiff: true
+host_interface:
+  arrays:
+    - name: concentrations
+      rank: 4
+      layout: LayoutLeft
+      extent: [1, 10, 10, 1]
