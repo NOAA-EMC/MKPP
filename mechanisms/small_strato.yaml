@@ -1,0 +1,107 @@
+name: small_strato
+description: Translated from small_strato KPP mechanism
+species:
+- name: O
+- name: O1D
+- name: O3
+- name: 'NO'
+- name: NO2
+- name: M
+- name: O2
+reactions:
+- type: PHOTOLYSIS
+  reactants:
+    O2: 1.0
+  products:
+    O: 2.0
+  A: 2.643E-10 * SUN*SUN*SUN
+  continuous_transition: true
+  stiff: false
+- type: ARRHENIUS
+  reactants:
+    O: 1.0
+    O2: 1.0
+  products:
+    O3: 1.0
+  A: '8.018E-17'
+  stiff: true
+- type: PHOTOLYSIS
+  reactants:
+    O3: 1.0
+  products:
+    O: 1.0
+    O2: 1.0
+  A: 6.120E-04 * SUN
+  continuous_transition: true
+  stiff: false
+- type: ARRHENIUS
+  reactants:
+    O: 1.0
+    O3: 1.0
+  products:
+    O2: 2.0
+  A: '1.576E-15'
+  stiff: true
+- type: PHOTOLYSIS
+  reactants:
+    O3: 1.0
+  products:
+    O1D: 1.0
+    O2: 1.0
+  A: 1.070E-03 * SUN*SUN
+  continuous_transition: true
+  stiff: false
+- type: ARRHENIUS
+  reactants:
+    O1D: 1.0
+    M: 1.0
+  products:
+    O: 1.0
+    M: 1.0
+  A: '7.110E-11'
+  stiff: true
+- type: ARRHENIUS
+  reactants:
+    O1D: 1.0
+    O3: 1.0
+  products:
+    O2: 2.0
+  A: '1.200E-10'
+  stiff: true
+- type: ARRHENIUS
+  reactants:
+    'NO': 1.0
+    O3: 1.0
+  products:
+    NO2: 1.0
+    O2: 1.0
+  A: '6.062E-15'
+  stiff: true
+- type: ARRHENIUS
+  reactants:
+    NO2: 1.0
+    O: 1.0
+  products:
+    'NO': 1.0
+    O2: 1.0
+  A: '1.069E-11'
+  stiff: true
+- type: PHOTOLYSIS
+  reactants:
+    NO2: 1.0
+  products:
+    'NO': 1.0
+    O: 1.0
+  A: 1.289E-02 * SUN
+  continuous_transition: true
+  stiff: false
+host_interface:
+  arrays:
+  - name: concentrations
+    rank: 4
+    layout: LayoutLeft
+    extent:
+    - 5
+    - 10
+    - 10
+    - 1

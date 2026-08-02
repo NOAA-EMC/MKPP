@@ -1,0 +1,36 @@
+name: ChapmanCycle
+description: Standard Chapman Cycle mechanism
+species:
+  - name: O
+  - name: O2
+  - name: O3
+  - name: M
+reactions:
+  - type: PHOTOLYSIS
+    reactants: {O2: 1}
+    products: {O: 2}
+    A: 1.0e-5
+    stiff: false
+    continuous_transition: true
+  - type: ARRHENIUS
+    reactants: {O: 1, O2: 1, M: 1}
+    products: {O3: 1, M: 1}
+    A: 6.0e-34
+    stiff: true
+  - type: PHOTOLYSIS
+    reactants: {O3: 1}
+    products: {O: 1, O2: 1}
+    A: 1.0e-3
+    stiff: false
+    continuous_transition: true
+  - type: ARRHENIUS
+    reactants: {O: 1, O3: 1}
+    products: {O2: 2}
+    A: 8.0e-12
+    stiff: true
+host_interface:
+  arrays:
+    - name: concentrations
+      rank: 4
+      layout: LayoutLeft
+      extent: [5, 10, 10, 1]

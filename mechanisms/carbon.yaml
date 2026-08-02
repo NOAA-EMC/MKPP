@@ -1,0 +1,65 @@
+name: carbon
+description: Translated from carbon KPP mechanism
+species:
+- name: CH4
+- name: CO
+- name: PCOfromCH4
+- name: PCOfromNMVOC
+- name: LCH4byOH
+- name: LCH4byCl
+- name: LCObyOH
+- name: FixedOH
+- name: FixedCl
+- name: DummyCH4
+- name: DummyNMVOC
+reactions:
+- type: ARRHENIUS
+  reactants:
+    CH4: 1.0
+    FixedOH: 1.0
+  products:
+    LCH4byOH: 1.0
+  A: 2.45e-12*exp(-1775.0e0/TEMP)
+  stiff: true
+- type: ARRHENIUS
+  reactants:
+    CH4: 1.0
+    FixedCl: 1.0
+  products:
+    LCH4byCl: 1.0
+  A: 9.60e-12*exp(-1360.0e0/TEMP)
+  stiff: true
+- type: ARRHENIUS
+  reactants:
+    DummyCH4: 1.0
+  products:
+    CO: 1.0
+    PCOfromCH4: 1.0
+  A: 4.2566446e-15
+  stiff: true
+- type: ARRHENIUS
+  reactants:
+    CO: 1.0
+    FixedOH: 1.0
+  products:
+    LCObyOH: 1.0
+  A: 7.3679649e-14
+  stiff: true
+- type: ARRHENIUS
+  reactants:
+    DummyNMVOC: 1.0
+  products:
+    CO: 1.0
+    PCOfromNMVOC: 1.0
+  A: 3.8199012e+04
+  stiff: true
+host_interface:
+  arrays:
+  - name: concentrations
+    rank: 4
+    layout: LayoutLeft
+    extent:
+    - 5
+    - 10
+    - 10
+    - 1

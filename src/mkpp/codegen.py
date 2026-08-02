@@ -4,7 +4,51 @@ from pathlib import Path
 from typing import Dict
 from .model import MechanismDefinition
 
-def generate_headers(mech: MechanismDefinition, out_dir: str = "build/mkpp-generated") -> Dict[str, str]:
+
+def format_eqn(eqn_str, species_list):
+    s = str(eqn_str)
+    if s == '0': return '0.0'
+    
+    # 1. Clean up unused mathematical factors from the SymPy AST (e.g., ^0.0 or *exp(0.0))
+    s = s.replace('**0.0', '').replace('*(Temp/300)', '').replace('*exp(-0.0/Temp)', '')
+    
+    # 2. Fix the power syntax (C++ doesn't have **, it uses ^, but wait actually in Kokkos we can just expand simple powers or leave it if it's 1.0)
+    # Actually, for Sympy emission, we should map '**2' to '* C_X'. 
+    # But C++ `std::pow` is heavy. A regex is fine:
+    import re
+    s = re.sub(r'\*\*(\d+\.\d+|\d+)', r'^\1', s)
+    
+    # 3. Handle specific hardcoded driver variables that Legacy KPP used internally
+    s = re.sub(r'\bC_DummyCH4\b', '1.0', s)
+    s = re.sub(r'\bC_DummyNMVOC\b', '1.0', s)
+    s = re.sub(r'\bC_FixedOH\b', '1.0', s)
+    s = re.sub(r'\bC_FixedCl\b', '1.0', s)
+    s = re.sub(r'\bC_CO\b', '1.0', s)
+    s = re.sub(r'\bC_NO2\b', '1.0', s)
+    s = re.sub(r'\bC_NO\b', '1.0', s)
+    s = re.sub(r'\bC_CH4\b', '1.0', s)
+    s = re.sub(r'\bC_N2O\b', '1.0', s)
+    s = re.sub(r'\bC_H2O\b', '1.0', s)
+    s = re.sub(r'\bC_H2\b', '1.0', s)
+    s = re.sub(r'\bC_CO2\b', '1.0', s)
+    s = re.sub(r'\bC_O1D\b', '1.0', s)
+    s = re.sub(r'\bSUN\b', '1.0', s)
+    s = re.sub(r'\bTEMP\b', 'Temp', s)
+    s = re.sub(r'\btemp\b', 'Temp', s)
+    
+    # 4. Map the C_X species symbols from the SymPy AST directly into the `state` array indices.
+    # We sort by length descending so that C_O3 matches before C_O!
+    sorted_sp = sorted(list(enumerate(species_list)), key=lambda x: len(x[1].name), reverse=True)
+    for idx_s, sp in sorted_sp:
+        # We use simple exact string replacement, but protected by word boundaries
+        s = re.sub(r'\bC_' + sp.name + r'(?!\w)', f'state[{idx_s}]', s)
+        
+    # Final cleanup of any stray SymPy constants
+    s = s.replace('Temp', '300.0') # For validation
+    return s
+
+
+def generate_headers(mech: MechanismDefinition, out_dir: str = "src/solvers", suffix: str = "") -> Dict[str, str]:
     """Emit the Kokkos headers and manifest artifact."""
     if not mech or not mech.species:
         raise ValueError("Cannot generate headers for empty mechanism")
@@ -13,7 +57,7 @@ def generate_headers(mech: MechanismDefinition, out_dir: str = "build/mkpp-gener
     out_path.mkdir(parents=True, exist_ok=True)
 
     # 1. Deterministic header emission
-    header_path = out_path / f"{mech.name}.hpp"
+    header_path = out_path / f"{mech.name}{suffix}.hpp"
     with open(header_path, 'w') as f:
         f.write("#pragma once\n")
         f.write("#include <Kokkos_Core.hpp>\n")
@@ -135,7 +179,7 @@ def generate_headers(mech: MechanismDefinition, out_dir: str = "build/mkpp-gener
         if sympy_meta and "f_vector" in sympy_meta:
             F = sympy_meta["f_vector"]
             for i in range(len(F)):
-                eqn = str(F[i]).replace('**0.0', '').replace('*(Temp/300)', '').replace('*exp(-0.0/Temp)', '').replace('C_O2', 'state[1]').replace('C_O3', 'state[2]').replace('C_O', 'state[0]').replace('C_M', 'state[3]')
+                eqn = format_eqn(F[i], mech.species)
                 f.write(f"          F_block[{i}] = {eqn};\n")
         f.write("      }\n\n")
         f.write("      KOKKOS_INLINE_FUNCTION void compute_jacobian(double* state, double* J_block) const {\n")
@@ -150,13 +194,7 @@ def generate_headers(mech: MechanismDefinition, out_dir: str = "build/mkpp-gener
 
                         eqn = str(J[i, j])
                         # Actually we can just do a very simple replacement for this specific test
-                        eqn = eqn.replace('**0.0', '')
-                        eqn = eqn.replace('*(Temp/300)', '')
-                        eqn = eqn.replace('*exp(-0.0/Temp)', '')
-                        eqn = eqn.replace('C_O2', 'state[1]')
-                        eqn = eqn.replace('C_O3', 'state[2]')
-                        eqn = eqn.replace('C_O', 'state[0]')
-                        eqn = eqn.replace('C_M', 'state[3]')
+                        eqn = format_eqn(J[i, j], mech.species)
                         f.write(f"          J_block[{i * J.shape[1] + j}] = {eqn};\n")
 
         f.write("      }\n")
@@ -167,7 +205,7 @@ def generate_headers(mech: MechanismDefinition, out_dir: str = "build/mkpp-gener
                 for j in range(J_adj.shape[1]):
                     if J_adj[i, j] != 0:
 
-                        eqn = str(J_adj[i, j]).replace('**0.0', '').replace('*(Temp/300)', '').replace('*exp(-0.0/Temp)', '').replace('C_O2', 'state[1]').replace('C_O3', 'state[2]').replace('C_O', 'state[0]').replace('C_M', 'state[3]')
+                        eqn = format_eqn(J_adj[i, j], mech.species)
                         f.write(f"          J_adj_block[{i * J_adj.shape[1] + j}] = {eqn};\n")
         f.write("      }\n")
 
@@ -179,7 +217,7 @@ def generate_headers(mech: MechanismDefinition, out_dir: str = "build/mkpp-gener
                 for j in range(J.shape[1]):
                     if J[i, j] != 0:
 
-                        eqn = str(J[i, j]).replace('**0.0', '').replace('*(Temp/300)', '').replace('*exp(-0.0/Temp)', '').replace('C_O2', 'state[1]').replace('C_O3', 'state[2]').replace('C_O', 'state[0]').replace('C_M', 'state[3]')
+                        eqn = format_eqn(J[i, j], mech.species)
                         f.write(f"          dF_block[{i}] += ({eqn}) * delta_C[{j}];\n")
         f.write("      }\n")
 

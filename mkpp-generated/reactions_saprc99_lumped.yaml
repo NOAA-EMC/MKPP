@@ -1,0 +1,1337 @@
+- type: PHOTOLYSIS
+  reactants:
+    NO2: 1.0
+  products:
+    'NO': 1.0
+    O3P: 1.0
+  A: '6.69e-1'
+- type: ARRHENIUS
+  reactants:
+    O3P: 1.0
+    O2: 1.0
+    AIR: 1.0
+  products:
+    O3: 1.0
+  A: '5.68e-34'
+  B: '-2.80'
+  C: 0.0
+- type: ARRHENIUS
+  reactants:
+    O3P: 1.0
+    O3: 1.0
+  products:
+    O2: 2.0
+  A: '8.00e-12'
+  B: 0.0
+  C: '2060.0'
+- type: ARRHENIUS
+  reactants:
+    O3P: 1.0
+    'NO': 1.0
+    AIR: 1.0
+  products:
+    NO2: 1.0
+  A: '1.00e-31'
+  B: '-1.60'
+  C: 0.0
+- type: ARRHENIUS
+  reactants:
+    O3P: 1.0
+    NO2: 1.0
+  products:
+    'NO': 1.0
+  A: '6.50e-12'
+  B: 0.0
+  C: '- 120.0'
+- type: TROE
+  reactants:
+    O3P: 1.0
+    NO2: 1.0
+  products:
+    NO3: 1.0
+  k0_A: '9.00e-32'
+  k0_B: '0.0'
+  k0_C: '-2.00'
+  kinf_A: '2.20e-11'
+  kinf_B: '0.0'
+  kinf_C: '0.0'
+  Fc: '0.80'
+- type: ARRHENIUS
+  reactants:
+    O3: 1.0
+    'NO': 1.0
+  products:
+    NO2: 1.0
+  A: '1.80e-12'
+  B: 0.0
+  C: '1370.0'
+- type: ARRHENIUS
+  reactants:
+    O3: 1.0
+    NO2: 1.0
+  products:
+    NO3: 1.0
+  A: '1.40e-13'
+  B: 0.0
+  C: '2470.0'
+- type: ARRHENIUS
+  reactants:
+    'NO': 1.0
+    NO3: 1.0
+  products:
+    NO2: 2.0
+  A: '1.80e-11'
+  B: 0.0
+  C: '-110.0'
+- type: ARRHENIUS
+  reactants:
+    'NO': 2.0
+    O2: 1.0
+  products:
+    NO2: 2.0
+  A: '3.30e-39'
+  B: 0.0
+  C: '-530.0'
+- type: TROE
+  reactants:
+    NO2: 1.0
+    NO3: 1.0
+  products:
+    N2O5: 1.0
+  k0_A: '2.80e-30'
+  k0_B: '0.0'
+  k0_C: '-3.50'
+  kinf_A: '2.00e-12'
+  kinf_B: '0.0'
+  kinf_C: '0.20'
+  Fc: '0.45'
+- type: TROE
+  reactants:
+    N2O5: 1.0
+  products:
+    NO2: 1.0
+    NO3: 1.0
+  k0_A: '1.e-3'
+  k0_B: '11000.0'
+  k0_C: '-3.5'
+  kinf_A: '9.7e+14'
+  kinf_B: '11080.0'
+  kinf_C: '0.1'
+  Fc: '0.45'
+- type: ARRHENIUS
+  reactants:
+    N2O5: 1.0
+    H2O: 1.0
+  products:
+    HNO3: 2.0
+  A: '2.60e-22'
+- type: ARRHENIUS
+  reactants:
+    NO2: 1.0
+    NO3: 1.0
+  products:
+    'NO': 1.0
+    NO2: 1.0
+  A: '4.50e-14'
+  B: 0.0
+  C: '1260.0'
+- type: PHOTOLYSIS
+  reactants:
+    NO3: 1.0
+  products:
+    'NO': 1.0
+  A: '1.59'
+- type: PHOTOLYSIS
+  reactants:
+    NO3: 1.0
+  products:
+    NO2: 1.0
+    O3P: 1.0
+  A: '1.50e+1'
+- type: PHOTOLYSIS
+  reactants:
+    O3: 1.0
+  products:
+    O3P: 1.0
+  A: '3.76e-2'
+- type: PHOTOLYSIS
+  reactants:
+    O3: 1.0
+  products:
+    O1D: 1.0
+  A: '4.19e-3'
+- type: ARRHENIUS
+  reactants:
+    O1D: 1.0
+    H2O: 1.0
+  products:
+    OH: 2.0
+  A: '2.20e-10'
+- type: ARRHENIUS
+  reactants:
+    O1D: 1.0
+    AIR: 1.0
+  products:
+    O3P: 1.0
+  A: '2.09e-11'
+  B: 0.0
+  C: '-95.0'
+- type: TROE
+  reactants:
+    OH: 1.0
+    'NO': 1.0
+  products:
+    HONO: 1.0
+  k0_A: '7.00e-31'
+  k0_B: '0.0'
+  k0_C: '-2.60'
+  kinf_A: '3.60e-11'
+  kinf_B: '0.0'
+  kinf_C: '-0.10'
+  Fc: '0.60'
+- type: PHOTOLYSIS
+  reactants:
+    HONO: 1.0
+  products:
+    OH: 1.0
+    'NO': 1.0
+  A: '1.27e-1'
+- type: PHOTOLYSIS
+  reactants:
+    HONO: 1.0
+  products:
+    HO2: 1.0
+    NO2: 1.0
+  A: '1.60e-2'
+- type: ARRHENIUS
+  reactants:
+    OH: 1.0
+    HONO: 1.0
+  products:
+    NO2: 1.0
+  A: '2.70e-12'
+  B: 0.0
+  C: '-260.0'
+- type: TROE
+  reactants:
+    OH: 1.0
+    NO2: 1.0
+  products:
+    HNO3: 1.0
+  k0_A: '2.43e-30'
+  k0_B: '0.0'
+  k0_C: '-3.10'
+  kinf_A: '1.67e-11'
+  kinf_B: '0.0'
+  kinf_C: '-2.10'
+  Fc: '0.60'
+- type: ARRHENIUS
+  reactants:
+    OH: 1.0
+    NO3: 1.0
+  products:
+    HO2: 1.0
+    NO2: 1.0
+  A: '2.00e-11'
+- type: EP2
+  reactants:
+    OH: 1.0
+    HNO3: 1.0
+  products:
+    NO3: 1.0
+  A0: '7.20e-15'
+  C0: '-785.0'
+  A2: '4.10e-16'
+  C2: '-1440.0'
+  A3: '1.90e-33'
+  C3: '-725.0'
+- type: PHOTOLYSIS
+  reactants:
+    HNO3: 1.0
+  products:
+    OH: 1.0
+    NO2: 1.0
+  A: '5.40e-5'
+- type: EP3
+  reactants:
+    OH: 1.0
+    CO: 1.0
+  products:
+    HO2: 1.0
+  A1: '1.30e-13'
+  C1: '0.0'
+  A2: '3.19e-33'
+  C2: '0.0'
+- type: ARRHENIUS
+  reactants:
+    OH: 1.0
+    O3: 1.0
+  products:
+    HO2: 1.0
+  A: '1.90e-12'
+  B: 0.0
+  C: '1000.0'
+- type: ARRHENIUS
+  reactants:
+    HO2: 1.0
+    'NO': 1.0
+  products:
+    OH: 1.0
+    NO2: 1.0
+  A: '3.40e-12'
+  B: 0.0
+  C: '-270.0'
+- type: TROE
+  reactants:
+    HO2: 1.0
+    NO2: 1.0
+  products:
+    HNO4: 1.0
+  k0_A: '1.80e-31'
+  k0_B: '0.0'
+  k0_C: '-3.20'
+  kinf_A: '4.70e-12'
+  kinf_B: '0.0'
+  kinf_C: '0.0'
+  Fc: '0.6'
+- type: TROE
+  reactants:
+    HNO4: 1.0
+  products:
+    HO2: 1.0
+    NO2: 1.0
+  k0_A: '4.10e-05'
+  k0_B: '10650.0'
+  k0_C: '0.0'
+  kinf_A: '5.7e+15'
+  kinf_B: '11170.0'
+  kinf_C: '0.0'
+  Fc: '0.5'
+- type: PHOTOLYSIS
+  reactants:
+    HNO4: 1.0
+  products:
+    HO2: 0.61
+    NO2: 0.61
+    OH: 0.39
+    NO3: 0.39
+  A: '4.69e-4'
+- type: ARRHENIUS
+  reactants:
+    HNO4: 1.0
+    OH: 1.0
+  products:
+    NO2: 1.0
+  A: '1.50e-12'
+  B: 0.0
+  C: '-360.0'
+- type: ARRHENIUS
+  reactants:
+    HO2: 1.0
+    O3: 1.0
+  products:
+    OH: 1.0
+  A: '1.40e-14'
+  B: 0.0
+  C: '600.0'
+- type: EP3
+  reactants:
+    HO2: 2.0
+  products:
+    H2O2: 1.0
+  A1: '2.20e-13'
+  C1: '-600.0'
+  A2: '1.85e-33'
+  C2: '-980.0'
+- type: EP3
+  reactants:
+    HO2: 2.0
+    H2O: 1.0
+  products:
+    H2O2: 1.0
+  A1: '3.08e-34'
+  C1: '-2800.0'
+  A2: '2.59e-54'
+  C2: '-3180.0'
+- type: ARRHENIUS
+  reactants:
+    NO3: 1.0
+    HO2: 1.0
+  products:
+    OH: 0.8
+    NO2: 0.8
+    HNO3: 0.2
+  A: '4.00e-12'
+- type: ARRHENIUS
+  reactants:
+    NO3: 2.0
+  products:
+    NO2: 2.0
+  A: '8.50e-13'
+  B: 0.0
+  C: '2450.0'
+- type: PHOTOLYSIS
+  reactants:
+    H2O2: 1.0
+  products:
+    OH: 2.0
+  A: '5.64e-4'
+- type: ARRHENIUS
+  reactants:
+    H2O2: 1.0
+    OH: 1.0
+  products:
+    HO2: 1.0
+  A: '2.90e-12'
+  B: 0.0
+  C: '160.0'
+- type: ARRHENIUS
+  reactants:
+    OH: 1.0
+    HO2: 1.0
+  products:
+    H2O: 1.0
+    O2: 1.0
+  A: '4.80e-11'
+  B: 0.0
+  C: '-250.0'
+- type: TROE
+  reactants:
+    OH: 1.0
+    SO2: 1.0
+  products:
+    HO2: 1.0
+    H2SO4: 1.0
+  k0_A: '4.00e-31'
+  k0_B: '0.0'
+  k0_C: '-3.30'
+  kinf_A: '2.00e-12'
+  kinf_B: '0.0'
+  kinf_C: '0.0'
+  Fc: '0.45'
+- type: ARRHENIUS
+  reactants:
+    OH: 1.0
+    H2: 1.0
+  products:
+    HO2: 1.0
+  A: '7.70e-12'
+  B: 0.0
+  C: '2100.0'
+- type: ARRHENIUS
+  reactants:
+    C_O2: 1.0
+    'NO': 1.0
+  products:
+    NO2: 1.0
+    HCHO: 1.0
+    HO2: 1.0
+  A: '2.80e-12'
+  B: 0.0
+  C: '-285.0'
+- type: ARRHENIUS
+  reactants:
+    C_O2: 1.0
+    HO2: 1.0
+  products:
+    COOH: 1.0
+  A: '3.80e-13'
+  B: 0.0
+  C: '-780.0'
+- type: ARRHENIUS
+  reactants:
+    C_O2: 1.0
+    NO3: 1.0
+  products:
+    HCHO: 1.0
+    HO2: 1.0
+    NO2: 1.0
+  A: '1.30e-12'
+- type: ARRHENIUS
+  reactants:
+    C_O2: 2.0
+  products:
+    MEOH: 1.0
+    HCHO: 1.0
+  A: '2.45e-14'
+  B: 0.0
+  C: '-710.0'
+- type: ARRHENIUS
+  reactants:
+    C_O2: 2.0
+  products:
+    HCHO: 2.0
+    HO2: 2.0
+  A: '5.90e-13'
+  B: 0.0
+  C: '509.0'
+- type: ARRHENIUS
+  reactants:
+    RO2_R: 1.0
+    'NO': 1.0
+  products:
+    NO2: 1.0
+    HO2: 1.0
+  A: '2.70e-12'
+  B: 0.0
+  C: '-360.0'
+- type: ARRHENIUS
+  reactants:
+    RO2_R: 1.0
+    HO2: 1.0
+  products:
+    ROOH: 1.0
+  A: '1.90e-13'
+  B: 0.0
+  C: '-1300.0'
+- type: ARRHENIUS
+  reactants:
+    RO2_R: 1.0
+    NO3: 1.0
+  products:
+    NO2: 1.0
+    HO2: 1.0
+  A: '2.30e-12'
+- type: ARRHENIUS
+  reactants:
+    RO2_R: 1.0
+    C_O2: 1.0
+  products:
+    HO2: 1.0
+    HCHO: 0.75
+    MEOH: 0.25
+  A: '2.00e-13'
+- type: ARRHENIUS
+  reactants:
+    RO2_R: 2.0
+  products:
+    HO2: 1.0
+  A: '3.50e-14'
+- type: ARRHENIUS
+  reactants:
+    R2O2: 1.0
+    'NO': 1.0
+  products:
+    NO2: 1.0
+  A: '2.70e-12'
+  B: 0.0
+  C: '-360.0'
+- type: ARRHENIUS
+  reactants:
+    R2O2: 1.0
+    HO2: 1.0
+  products:
+    HO2: 1.0
+  A: '1.90e-13'
+  B: 0.0
+  C: '-1300.0'
+- type: ARRHENIUS
+  reactants:
+    R2O2: 1.0
+    NO3: 1.0
+  products:
+    NO2: 1.0
+  A: '2.30e-12'
+- type: ARRHENIUS
+  reactants:
+    R2O2: 1.0
+    C_O2: 1.0
+  products:
+    C_O2: 1.0
+  A: '2.00e-13'
+- type: ARRHENIUS
+  reactants:
+    R2O2: 1.0
+    RO2_R: 1.0
+  products:
+    RO2_R: 1.0
+  A: '3.50e-14'
+- type: ARRHENIUS
+  reactants:
+    R2O2: 2.0
+  products:
+    R2O2: 2.0
+  A: '0.0'
+- type: ARRHENIUS
+  reactants:
+    RO2_N: 1.0
+    'NO': 1.0
+  products:
+    RNO3: 1.0
+  A: '2.70e-12'
+  B: 0.0
+  C: '-360.0'
+- type: ARRHENIUS
+  reactants:
+    RO2_N: 1.0
+    HO2: 1.0
+  products:
+    ROOH: 1.0
+  A: '1.90e-13'
+  B: 0.0
+  C: '-1300.0'
+- type: ARRHENIUS
+  reactants:
+    RO2_N: 1.0
+    NO3: 1.0
+  products:
+    NO2: 1.0
+    HO2: 1.0
+    MEK: 1.0
+  A: '2.30e-12'
+- type: ARRHENIUS
+  reactants:
+    RO2_N: 1.0
+    R2O2: 1.0
+  products:
+    RO2_N: 1.0
+  A: '3.50e-14'
+- type: ARRHENIUS
+  reactants:
+    RO2_N: 2.0
+  products:
+    MEK: 1.0
+    HO2: 1.0
+    PROD2: 1.0
+  A: '3.50e-14'
+- type: TROE
+  reactants:
+    CCO_O2: 1.0
+    NO2: 1.0
+  products:
+    PAN: 1.0
+  k0_A: '2.70e-28'
+  k0_B: '0.0'
+  k0_C: '-7.10'
+  kinf_A: '1.20e-11'
+  kinf_B: '0.0'
+  kinf_C: '-0.90'
+  Fc: '0.30'
+- type: TROE
+  reactants:
+    PAN: 1.0
+  products:
+    CCO_O2: 1.0
+    NO2: 1.0
+  k0_A: '4.90e-3'
+  k0_B: '12100.0'
+  k0_C: '0.0'
+  kinf_A: '4.0e+16'
+  kinf_B: '13600.0'
+  kinf_C: '0.'
+  Fc: '0.3'
+- type: ARRHENIUS
+  reactants:
+    CCO_O2: 1.0
+    'NO': 1.0
+  products:
+    C_O2: 1.0
+    NO2: 1.0
+  A: '7.80e-12'
+  B: 0.0
+  C: '-300.0'
+- type: ARRHENIUS
+  reactants:
+    CCO_O2: 1.0
+    NO3: 1.0
+  products:
+    C_O2: 1.0
+    NO2: 1.0
+  A: '4.00e-12'
+- type: ARRHENIUS
+  reactants:
+    CCO_O2: 1.0
+    C_O2: 1.0
+  products:
+    CCO_OH: 1.0
+    HCHO: 1.0
+  A: '1.80e-12'
+  B: 0.0
+  C: '-500.0'
+- type: ARRHENIUS
+  reactants:
+    CCO_O2: 1.0
+    RO2_R: 1.0
+  products:
+    CCO_OH: 1.0
+  A: '7.50e-12'
+- type: ARRHENIUS
+  reactants:
+    CCO_O2: 1.0
+    R2O2: 1.0
+  products:
+    CCO_O2: 1.0
+  A: '7.50e-12'
+- type: ARRHENIUS
+  reactants:
+    CCO_O2: 1.0
+    RO2_N: 1.0
+  products:
+    CCO_OH: 1.0
+    PROD2: 1.0
+  A: '7.50e-12'
+- type: ARRHENIUS
+  reactants:
+    CCO_O2: 2.0
+  products:
+    C_O2: 2.0
+  A: '2.90e-12'
+  B: 0.0
+  C: '-500.0'
+- type: ARRHENIUS
+  reactants:
+    RCO_O2: 1.0
+    NO2: 1.0
+  products:
+    PAN2: 1.0
+  A: '1.20e-11'
+  B: '-0.90'
+  C: 0.0
+- type: ARRHENIUS
+  reactants:
+    PAN2: 1.0
+  products:
+    RCO_O2: 1.0
+    NO2: 1.0
+  A: '2.00e+15'
+  B: 0.0
+  C: '12800.0'
+- type: ARRHENIUS
+  reactants:
+    RCO_O2: 1.0
+    'NO': 1.0
+  products:
+    NO2: 1.0
+    CCHO: 1.0
+    RO2_R: 1.0
+  A: '1.25e-11'
+  B: 0.0
+  C: '-240.0'
+- type: ARRHENIUS
+  reactants:
+    RCO_O2: 1.0
+    NO3: 1.0
+  products:
+    NO2: 1.0
+    CCHO: 1.0
+    RO2_R: 1.0
+  A: '4.00e-12'
+- type: ARRHENIUS
+  reactants:
+    RCO_O2: 1.0
+    C_O2: 1.0
+  products:
+    RCO_OH: 1.0
+    HCHO: 1.0
+  A: '1.80e-12'
+  B: 0.0
+  C: '-500.0'
+- type: ARRHENIUS
+  reactants:
+    RCO_O2: 1.0
+    RO2_R: 1.0
+  products:
+    RCO_OH: 1.0
+  A: '7.50e-12'
+- type: ARRHENIUS
+  reactants:
+    RCO_O2: 1.0
+    R2O2: 1.0
+  products:
+    RCO_O2: 1.0
+  A: '7.50e-12'
+- type: ARRHENIUS
+  reactants:
+    RCO_O2: 1.0
+    RO2_N: 1.0
+  products:
+    RCO_OH: 1.0
+    PROD2: 1.0
+  A: '7.50e-12'
+- type: ARRHENIUS
+  reactants:
+    RCO_O2: 1.0
+    CCO_O2: 1.0
+  products:
+    C_O2: 1.0
+    CCHO: 1.0
+    RO2_R: 1.0
+  A: '2.90e-12'
+  B: 0.0
+  C: '-500.0'
+- type: ARRHENIUS
+  reactants:
+    RCO_O2: 2.0
+  products:
+    CCHO: 2.0
+    RO2_R: 2.0
+  A: '2.90e-12'
+  B: 0.0
+  C: '-500.0'
+- type: ARRHENIUS
+  reactants:
+    BZCO_O2: 1.0
+    NO2: 1.0
+  products:
+    PBZN: 1.0
+  A: '1.37e-11'
+- type: ARRHENIUS
+  reactants:
+    PBZN: 1.0
+  products:
+    BZCO_O2: 1.0
+    NO2: 1.0
+  A: '7.90e+16'
+  B: 0.0
+  C: '14000.0'
+- type: ARRHENIUS
+  reactants:
+    BZCO_O2: 1.0
+    'NO': 1.0
+  products:
+    NO2: 1.0
+    BZ_O: 1.0
+    R2O2: 1.0
+  A: '1.25e-11'
+  B: 0.0
+  C: '-240.0'
+- type: ARRHENIUS
+  reactants:
+    BZCO_O2: 1.0
+    NO3: 1.0
+  products:
+    NO2: 1.0
+    BZ_O: 1.0
+    R2O2: 1.0
+  A: '4.00e-12'
+- type: ARRHENIUS
+  reactants:
+    BZCO_O2: 1.0
+    C_O2: 1.0
+  products:
+    RCO_OH: 1.0
+    HCHO: 1.0
+  A: '1.80e-12'
+  B: 0.0
+  C: '-500.0'
+- type: ARRHENIUS
+  reactants:
+    BZCO_O2: 1.0
+    RO2_R: 1.0
+  products:
+    RCO_OH: 1.0
+  A: '7.50e-12'
+- type: ARRHENIUS
+  reactants:
+    BZCO_O2: 1.0
+    R2O2: 1.0
+  products:
+    BZCO_O2: 1.0
+  A: '7.50e-12'
+- type: ARRHENIUS
+  reactants:
+    BZCO_O2: 1.0
+    RO2_N: 1.0
+  products:
+    RCO_OH: 1.0
+    PROD2: 1.0
+  A: '7.50e-12'
+- type: ARRHENIUS
+  reactants:
+    BZCO_O2: 1.0
+    CCO_O2: 1.0
+  products:
+    C_O2: 1.0
+    BZ_O: 1.0
+    R2O2: 1.0
+  A: '2.90e-12'
+  B: 0.0
+  C: '-500.0'
+- type: ARRHENIUS
+  reactants:
+    BZCO_O2: 2.0
+  products:
+    BZ_O: 2.0
+    R2O2: 2.0
+  A: '2.90e-12'
+  B: 0.0
+  C: '-500.0'
+- type: ARRHENIUS
+  reactants:
+    MA_RCO3: 1.0
+    NO2: 1.0
+  products:
+    MA_PAN: 1.0
+  A: '1.20e-11'
+  B: '-0.90'
+  C: 0.0
+- type: ARRHENIUS
+  reactants:
+    MA_PAN: 1.0
+  products:
+    MA_RCO3: 1.0
+    NO2: 1.0
+  A: '1.60e+16'
+  B: 0.0
+  C: '13486.0'
+- type: ARRHENIUS
+  reactants:
+    MA_RCO3: 1.0
+    'NO': 1.0
+  products:
+    NO2: 1.0
+    HCHO: 1.0
+    CCO_O2: 1.0
+  A: '1.25e-11'
+  B: 0.0
+  C: '-240.0'
+- type: ARRHENIUS
+  reactants:
+    MA_RCO3: 1.0
+    NO3: 1.0
+  products:
+    NO2: 1.0
+    HCHO: 1.0
+    CCO_O2: 1.0
+  A: '4.00e-12'
+- type: ARRHENIUS
+  reactants:
+    MA_RCO3: 1.0
+    C_O2: 1.0
+  products:
+    RCO_OH: 1.0
+    HCHO: 1.0
+  A: '1.80e-12'
+  B: 0.0
+  C: '-500.0'
+- type: ARRHENIUS
+  reactants:
+    MA_RCO3: 1.0
+    RO2_R: 1.0
+  products:
+    RCO_OH: 1.0
+  A: '7.50e-12'
+- type: ARRHENIUS
+  reactants:
+    MA_RCO3: 1.0
+    R2O2: 1.0
+  products:
+    MA_RCO3: 1.0
+  A: '7.50e-12'
+- type: ARRHENIUS
+  reactants:
+    MA_RCO3: 1.0
+    RO2_N: 1.0
+  products:
+    RCO_OH: 2.0
+  A: '7.50e-12'
+- type: ARRHENIUS
+  reactants:
+    MA_RCO3: 2.0
+  products:
+    HCHO: 2.0
+    CCO_O2: 2.0
+  A: '2.90e-12'
+  B: 0.0
+  C: '-500.0'
+- type: ARRHENIUS
+  reactants:
+    TBU_O: 1.0
+    NO2: 1.0
+  products:
+    RNO3: 1.0
+  A: '2.40e-11'
+- type: ARRHENIUS
+  reactants:
+    TBU_O: 1.0
+  products:
+    ACET: 1.0
+    C_O2: 1.0
+  A: '7.50e+14'
+  B: 0.0
+  C: '8152.0'
+- type: ARRHENIUS
+  reactants:
+    BZ_O: 1.0
+    NO2: 1.0
+  products:
+    NPHE: 1.0
+  A: '2.30e-11'
+  B: 0.0
+  C: '-150.0'
+- type: ARRHENIUS
+  reactants:
+    BZ_O: 1.0
+    HO2: 1.0
+  products:
+    PHEN: 1.0
+  A: '1.90e-13'
+  B: 0.0
+  C: '-1300.0'
+- type: ARRHENIUS
+  reactants:
+    BZ_O: 1.0
+  products:
+    PHEN: 1.0
+  A: '1.00e-03'
+- type: ARRHENIUS
+  reactants:
+    BZNO2_O: 1.0
+    NO2: 1.0
+  products:
+    XN: 2.0
+    XC: 6.0
+  A: '7.50e+14'
+  B: 0.0
+  C: '8152.0'
+- type: ARRHENIUS
+  reactants:
+    BZNO2_O: 1.0
+    HO2: 1.0
+  products:
+    NPHE: 1.0
+  A: '2.30e-11'
+  B: 0.0
+  C: '-150.0'
+- type: ARRHENIUS
+  reactants:
+    BZNO2_O: 1.0
+  products:
+    NPHE: 1.0
+  A: '1.90e-13'
+  B: 0.0
+  C: '-1300.0'
+- type: PHOTOLYSIS
+  reactants:
+    HCHO: 1.0
+  products:
+    HO2: 2.0
+    CO: 1.0
+  A: '2.32e-3'
+- type: PHOTOLYSIS
+  reactants:
+    HCHO: 1.0
+  products:
+    CO: 1.0
+  A: '3.15e-3'
+- type: ARRHENIUS
+  reactants:
+    HCHO: 1.0
+    OH: 1.0
+  products:
+    HO2: 1.0
+    CO: 1.0
+  A: '8.60e-12'
+  B: 0.0
+  C: '-20.0'
+- type: ARRHENIUS
+  reactants:
+    HCHO: 1.0
+    HO2: 1.0
+  products:
+    HOCOO: 1.0
+  A: '9.70e-15'
+  B: 0.0
+  C: '-625.0'
+- type: ARRHENIUS
+  reactants:
+    HOCOO: 1.0
+  products:
+    HO2: 1.0
+    HCHO: 1.0
+  A: '2.40e+12'
+  B: 0.0
+  C: '7000.0'
+- type: ARRHENIUS
+  reactants:
+    HOCOO: 1.0
+    'NO': 1.0
+  products:
+    HCOOH: 1.0
+    NO2: 1.0
+    HO2: 1.0
+  A: '2.80e-12'
+  B: 0.0
+  C: '-285.0'
+- type: ARRHENIUS
+  reactants:
+    HCHO: 1.0
+    NO3: 1.0
+  products:
+    HNO3: 1.0
+    HO2: 1.0
+    CO: 1.0
+  A: '2.00e-12'
+  B: 0.0
+  C: '2431.0'
+- type: ARRHENIUS
+  reactants:
+    CCHO: 1.0
+    OH: 1.0
+  products:
+    CCO_O2: 1.0
+  A: '5.60e-12'
+  B: 0.0
+  C: '-310.0'
+- type: PHOTOLYSIS
+  reactants:
+    CCHO: 1.0
+  products:
+    CO: 1.0
+    HO2: 1.0
+    C_O2: 1.0
+  A: '4.16e-4'
+- type: ARRHENIUS
+  reactants:
+    CCHO: 1.0
+    NO3: 1.0
+  products:
+    HNO3: 1.0
+    CCO_O2: 1.0
+  A: '1.40e-12'
+  B: 0.0
+  C: '1860.0'
+- type: PHOTOLYSIS
+  reactants:
+    RCHO: 1.0
+  products:
+    CCHO: 1.0
+    RO2_R: 1.0
+    CO: 1.0
+    HO2: 1.0
+  A: '1.40e-3'
+- type: ARRHENIUS
+  reactants:
+    RCHO: 1.0
+    NO3: 1.0
+  products:
+    HNO3: 1.0
+    RCO_O2: 1.0
+  A: '1.40e-12'
+  B: 0.0
+  C: '1771.0'
+- type: ARRHENIUS
+  reactants:
+    ACET: 1.0
+    OH: 1.0
+  products:
+    HCHO: 1.0
+    CCO_O2: 1.0
+    R2O2: 1.0
+  A: '1.10e-12'
+  B: 0.0
+  C: '520.0'
+- type: PHOTOLYSIS
+  reactants:
+    ACET: 1.0
+  products:
+    CCO_O2: 1.0
+    C_O2: 1.0
+  A: '4.16e-5'
+- type: PHOTOLYSIS
+  reactants:
+    MEK: 1.0
+  products:
+    CCO_O2: 1.0
+    CCHO: 1.0
+    RO2_R: 1.0
+  A: 9.49e-4*(1.50e-1*SUN/60.0)
+- type: ARRHENIUS
+  reactants:
+    MEOH: 1.0
+    OH: 1.0
+  products:
+    HCHO: 1.0
+    HO2: 1.0
+  A: '3.10e-12'
+  C: '360.0'
+  B: '2.0'
+- type: PHOTOLYSIS
+  reactants:
+    COOH: 1.0
+  products:
+    HCHO: 1.0
+    HO2: 1.0
+    OH: 1.0
+  A: '3.94e-4'
+- type: PHOTOLYSIS
+  reactants:
+    ROOH: 1.0
+  products:
+    RCHO: 1.0
+    HO2: 1.0
+    OH: 1.0
+  A: '3.94e-4'
+- type: PHOTOLYSIS
+  reactants:
+    GLY: 1.0
+  products:
+    CO: 2.0
+    HO2: 2.0
+  A: '8.93e-3'
+- type: PHOTOLYSIS
+  reactants:
+    GLY: 1.0
+  products:
+    HCHO: 1.0
+    CO: 1.0
+  A: 1.81e-1*(6.00e-3*SUN/60.0)
+- type: PHOTOLYSIS
+  reactants:
+    MGLY: 1.0
+  products:
+    HO2: 1.0
+    CO: 1.0
+    CCO_O2: 1.0
+  A: '1.10e-2'
+- type: ARRHENIUS
+  reactants:
+    MGLY: 1.0
+    OH: 1.0
+  products:
+    CO: 1.0
+    CCO_O2: 1.0
+  A: '1.50e-11'
+- type: ARRHENIUS
+  reactants:
+    MGLY: 1.0
+    NO3: 1.0
+  products:
+    HNO3: 1.0
+    CO: 1.0
+    CCO_O2: 1.0
+  A: '1.40e-12'
+  B: 0.0
+  C: '1895.0'
+- type: PHOTOLYSIS
+  reactants:
+    BACL: 1.0
+  products:
+    CCO_O2: 2.0
+  A: '1.90e-2'
+- type: ARRHENIUS
+  reactants:
+    PHEN: 1.0
+    NO3: 1.0
+  products:
+    HNO3: 1.0
+    BZ_O: 1.0
+  A: '3.78e-12'
+- type: ARRHENIUS
+  reactants:
+    CRES: 1.0
+    NO3: 1.0
+  products:
+    HNO3: 1.0
+    BZ_O: 1.0
+  A: '1.37e-11'
+- type: ARRHENIUS
+  reactants:
+    NPHE: 1.0
+    NO3: 1.0
+  products:
+    HNO3: 1.0
+    BZNO2_O: 1.0
+  A: '3.78e-12'
+- type: ARRHENIUS
+  reactants:
+    BALD: 1.0
+    OH: 1.0
+  products:
+    BZCO_O2: 1.0
+  A: '1.29e-11'
+- type: PHOTOLYSIS
+  reactants:
+    BALD: 1.0
+  products:
+    XC: 7.0
+  A: 6.22e-2*(5.00e-2*SUN/60.0)
+- type: ARRHENIUS
+  reactants:
+    BALD: 1.0
+    NO3: 1.0
+  products:
+    HNO3: 1.0
+    BZCO_O2: 1.0
+  A: '1.40e-12'
+  B: 0.0
+  C: '1872.0'
+- type: ARRHENIUS
+  reactants:
+    METHACRO: 1.0
+    O3P: 1.0
+  products:
+    RCHO: 1.0
+  A: '6.34e-12'
+- type: ARRHENIUS
+  reactants:
+    MVK: 1.0
+    O3P: 1.0
+  products:
+    RCHO: 0.45
+    MEK: 0.55
+  A: '4.32e-12'
+- type: ARRHENIUS
+  reactants:
+    DCB1: 1.0
+    OH: 1.0
+  products:
+    RCHO: 1.0
+    RO2_R: 1.0
+    CO: 1.0
+  A: '5.00e-11'
+- type: ARRHENIUS
+  reactants:
+    DCB2: 1.0
+    OH: 1.0
+  products:
+    R2O2: 1.0
+    RCHO: 1.0
+    CCO_O2: 1.0
+  A: '5.00e-11'
+- type: ARRHENIUS
+  reactants:
+    DCB3: 1.0
+    OH: 1.0
+  products:
+    R2O2: 1.0
+    RCHO: 1.0
+    CCO_O2: 1.0
+  A: '5.00e-11'
+- type: ARRHENIUS
+  reactants:
+    CH4: 1.0
+    OH: 1.0
+  products:
+    C_O2: 1.0
+  A: '2.15e-12'
+  B: 0.0
+  C: '1735.0'
+- type: ARRHENIUS
+  reactants:
+    ETHENE: 1.0
+    NO3: 1.0
+  products:
+    RO2_R: 1.0
+    RCHO: 1.0
+  A: '4.39e-13'
+  C: '2282.0'
+  B: '2.0'
+- type: ARRHENIUS
+  reactants:
+    TERP: 1.0
+    O3P: 1.0
+  products:
+    RCHO: 0.147
+    PROD2: 0.853
+  A: '3.27e-11'
+- type: ARRHENIUS
+  reactants:
+    ALK1_SURR: 1.0
+    OH: 1.0
+  products:
+    RO2_R: 1.0
+    CCHO: 1.0
+  A: '1.37e-12'
+  C: '498.0'
+  B: '2.0'
