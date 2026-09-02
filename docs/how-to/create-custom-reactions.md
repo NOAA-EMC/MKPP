@@ -47,6 +47,7 @@ reactions:
 ```
 
 Available environmental driver symbols in custom rate expressions:
+
 - `Temp`: Temperature $[K]$.
 - `Press`: Pressure $[Pa]$.
 - `M_density` / `cair`: Air density $[\text{molec/cm}^3]$.
