@@ -296,9 +296,6 @@ RAII `mkpp::MechanismContext` wrapper class managing handle lifecycles and throw
 ---
 
 ## 7. CF Metadata Standard Table
-=======
-## 4. CF Metadata Standard Table
->>>>>>> origin/develop
 
 Variables and species states in MKPP generated solvers conform to standard Climate and Forecast (CF) metadata conventions:
 
