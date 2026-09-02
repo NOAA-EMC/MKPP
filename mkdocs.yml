@@ -81,6 +81,7 @@ nav:
       - Benchmark MKPP vs MICM: tutorials/benchmark-mkpp-vs-micm.md
   - How-To Guides:
       - Host Model Integration: how-to/host_model_integration.md
+      - Run a Box Model in Python: how-to/run-box-model-in-python.md
       - Create Custom Reactions: how-to/create-custom-reactions.md
       - Compile Adjoint & TLM Solvers: how-to/compile-adjoint-and-tlm-solvers.md
   - Reference:
@@ -91,6 +92,7 @@ nav:
           - Parser: reference/api/parser.md
           - Lowering & Calculus: reference/api/lowering.md
           - Code Generation: reference/api/codegen.md
+          - Box Model: reference/api/box.md
   - Explanation:
       - End-to-End Compiler Pipeline: explanation/mkpp-end-to-end-architecture.md
       - AOT Symbolic LU Architecture: explanation/aot-symbolic-lu-architecture.md
