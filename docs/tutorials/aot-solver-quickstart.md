@@ -7,6 +7,7 @@ This tutorial guides you through generating, compiling, and executing an Ahead-O
 ## Learning Objectives
 
 By the end of this tutorial, you will be able to:
+
 1. Generate C++ Kokkos ODE solver headers from a chemical mechanism specification using the MKPP Python AOT generator.
 2. Integrate the generated Kokkos header into a C++ application.
 3. Launch parallel ODE integration across grid cells using Kokkos views and execution spaces.
@@ -42,6 +43,7 @@ mkpp compile mechanisms/openatmos/saprc99/mechanism.json --test-env example_env.
 ```
 
 The generated header (`mkpp-generated/saprc99.hpp`) contains:
+
 - Flat scalar rate evaluations (`compute_rates`).
 - Symbolic, unrolled Jacobian computation (`compute_jacobian`).
 - RCM-permuted and block-sparse symbolic LU decomposition (`lu_decompose`).
