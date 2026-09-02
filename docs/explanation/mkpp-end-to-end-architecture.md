@@ -7,6 +7,7 @@ This document provides a comprehensive, start-to-finish explanation of how the M
 ## 1. Executive Overview & Paradigm Shift
 
 Atmospheric chemistry is one of the most computationally demanding components of modern Earth System Models (ESMs) such as the Unified Forecast System (UFS). Legacy chemical solvers (like traditional Fortran KPP) suffer from severe performance bottlenecks on modern GPUs and multi-core CPUs due to:
+
 1. **CPU-bound runtime abstractions**: $O(N^3)$ Gaussian elimination loops executed inside the time-integrator kernel.
 2. **Thread-local memory spilling**: Allocating multi-kilobyte thread-local arrays (`double Jac[10000]`) that spill from GPU registers to high-latency local VRAM.
 3. **Operator splitting**: Pausing the chemical ODE solver to run aerosol microphysics modules separately, introducing time-truncation errors and bus memory transfer bottlenecks.
