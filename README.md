@@ -2,10 +2,6 @@
 
 MKPP (Multiphase Kinetic PreProcessor) is a highly optimized, Ahead-Of-Time (AOT) Python compiler that translates atmospheric chemistry mechanisms (defined via OpenAtmos YAML) into Exascale-ready block-sparse Kokkos C++ headers for a Unified Jacobian using SymPy.
 
-## NOAA NWS Office of Modeling and Development
-
-To design, build, integrate, and optimize robust scientific software, high-performance computing (HPC) software pipelines, and numerical weather prediction (NWP) systems that protect life and property.
-
 ## Mechanisms Included
 - **Chapman Cycle** (`chapman.yaml`)
 - **Small Stratospheric** (`small_strato.yaml`)
