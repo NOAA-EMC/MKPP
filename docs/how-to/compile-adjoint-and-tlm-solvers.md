@@ -26,6 +26,7 @@ mkpp compile mechanisms/openatmos/saprc99/mechanism.json \
 ```
 
 When `--adjoint` is enabled, the generated header (`mkpp-generated/saprc99.hpp`) includes:
+
 - `CheckpointBuffer`: Struct for saving forward trajectory state vectors at each accepted timestep.
 - `integrate_fwd_checkpoint`: Forward integration kernel that records checkpoints during integration.
 - `integrate_adj`: Discrete adjoint backward integration kernel that walks backward through saved checkpoints, accumulating adjoint variables ($\lambda$).
