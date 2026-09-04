@@ -16,6 +16,8 @@ dependencies = [
     "jinja2>=3.1,<4",
     "networkx>=3.1,<4",
     "matplotlib>=3.5",
+    "numpy>=1.24",
+    "scipy>=1.10",
     "pytest-xdist>=3.0",
     "jsonschema>=4.21,<5"
 ]
@@ -31,6 +33,7 @@ solver-comparison = [
 
 [project.scripts]
 mkpp = "mkpp.cli:main"
+mkpp-box = "mkpp.box:main"
 mkpp-compare-solvers = "mkpp.benchmark.cli:main"
 
 [tool.setuptools]

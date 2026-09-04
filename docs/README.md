@@ -31,6 +31,8 @@ Practical step-by-step guides for solving specific real-world tasks.
 
 * **[Create Custom Reactions](how-to/create-custom-reactions.md)**
   * Define custom kinetics, SymPy math rate expressions, multiphase aerosol condensation, and extend the Python lowering engine.
+* **[Run a Box Model in Python](how-to/run-box-model-in-python.md)**
+  * Integrate any OpenAtmos mechanism as a 0-D chemical box model directly in Python with SciPy — no C++ compilation required.
 * **[Solver Comparison Benchmarks](tutorials/benchmark-mkpp-vs-micm.md)**
   * Execute numerical accuracy verification against legacy Fortran KPP, run 24-hour diurnal cycle benchmarks, and profile GPU register usage.
 * **[Compile & Run Adjoint and TLM Solvers](how-to/compile-adjoint-and-tlm-solvers.md)**
