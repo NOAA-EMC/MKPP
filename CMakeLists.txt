@@ -1,7 +1,18 @@
 cmake_minimum_required(VERSION 3.24)
 project(MKPP_Root CXX)
 
-find_package(Kokkos REQUIRED)
+# When MKPP is consumed via add_subdirectory from a parent build (e.g. CATChem),
+# the parent has already made Kokkos available: either as imported targets from
+# find_package or as in-tree targets from FetchContent. Re-running
+# find_package(Kokkos) in that situation is not a no-op -- it searches the
+# config package on disk, which may resolve to a DIFFERENT Kokkos installation
+# than the parent is building against, and re-including its exported targets
+# collides with the parent's existing Kokkos:: targets. Adopt the parent's
+# Kokkos when its targets already exist; find it ourselves only for a
+# standalone MKPP build.
+if(NOT TARGET Kokkos::kokkos)
+  find_package(Kokkos REQUIRED)
+endif()
 
 option(MKPP_ENABLE_KOKKOS_KERNELS
        "Enable KokkosKernels integration for batched computations" OFF)
