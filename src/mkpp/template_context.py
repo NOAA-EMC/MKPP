@@ -101,6 +101,15 @@ def build_template_context(
 
     # --- Determine equilibrium and photolysis flags ---
     has_equilibrium = bool(mech.equilibrium_reactions)
+    # A cloud-gated kinetic reaction (activation_trigger naming
+    # meteo.cloud_liquid_water) requires the generated solver to accept cloud
+    # liquid water as a third per-cell equilibrium input
+    # (EquilibriumInput.CloudLiquidWater). It also implies the equilibrium
+    # parameter channel (temp/rh) is live, so has_equilibrium is forced True;
+    # otherwise the runtime parameters would not be threaded.
+    has_cloud_gated = bool(getattr(mech, "has_cloud_gated_reaction", False))
+    if has_cloud_gated:
+        has_equilibrium = True
     has_photolysis = False
     num_photolysis = 0
     photolysis_reactions = []
@@ -348,6 +357,7 @@ def build_template_context(
         "permutation": permutation,
         "adjoint_enabled": adjoint,
         "has_equilibrium": has_equilibrium,
+        "has_cloud_gated": has_cloud_gated,
         "has_photolysis": has_photolysis,
         "num_photolysis": num_photolysis,
         "tolerance_arrays": tolerance_arrays,

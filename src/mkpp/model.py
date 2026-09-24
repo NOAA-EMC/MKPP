@@ -71,6 +71,7 @@ class EquilibriumInput(Enum):
 
     Temperature = 0
     RelativeHumidity = 1
+    CloudLiquidWater = 2
 
 
 @dataclass
@@ -155,6 +156,13 @@ class MechanismDefinition:
     units: str = "canonical"
     metadata: dict[str, str] = field(default_factory=dict)
     equilibrium_reactions: list[EquilibriumDefinition] = field(default_factory=list)
+    # True when any kinetic reaction declares an `activation_trigger` naming a
+    # runtime meteorological quantity (e.g. `meteo.cloud_liquid_water > 1e-6`).
+    # Such a reaction's rate is gated by a smooth indicator of that quantity, so
+    # the generated solver must accept it as an additional per-cell equilibrium
+    # input (see EquilibriumInput.CloudLiquidWater). When False, the generated
+    # code is byte-identical to a mechanism without triggers.
+    has_cloud_gated_reaction: bool = False
 
 
 @dataclass

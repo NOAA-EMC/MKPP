@@ -220,6 +220,7 @@ def template_context_strategy(draw):
         "permutation": None,
         "adjoint_enabled": adjoint_enabled,
         "has_equilibrium": has_equilibrium,
+        "has_cloud_gated": False,
         "has_photolysis": has_photolysis,
         "num_photolysis": num_photolysis,
         "tolerance_arrays": tolerance_arrays,

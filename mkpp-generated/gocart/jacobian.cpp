@@ -5,26 +5,28 @@
 namespace mkpp::generated::gocart::detail {
 void compute_jacobian_chunk_0(
     const double* state, double* jacobian,
-    const double* jvals, double temp, double rh) {
+    const double* jvals, double temp, double rh, double clw) {
   const double Temp = temp;
   const double RH = rh;
   (void)RH;
+  const double CLW = clw;
+  (void)CLW;  // Referenced only by the gated reaction's chunk.
   jacobian[0 * 26 + 0] = -1.2e-11*state[3]*exp(-260.0/Temp) - 3.3e-12*state[4];
   jacobian[0 * 26 + 2] = 2.0*jvals[0];
   jacobian[0 * 26 + 3] = -1.2e-11*state[0]*exp(-260.0/Temp);
   jacobian[0 * 26 + 4] = -3.3e-12*state[0];
   jacobian[1 * 26 + 1] = -1.9e-13*state[3]*exp(-520.0/Temp);
   jacobian[1 * 26 + 3] = -1.9e-13*state[1]*exp(-520.0/Temp);
-  jacobian[2 * 26 + 2] = -0.0025*state[4] - 1.0*jvals[0];
-  jacobian[2 * 26 + 4] = -0.0025*state[2];
+  jacobian[2 * 26 + 2] = -0.0025*state[4]*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 1.0*jvals[0];
+  jacobian[2 * 26 + 4] = -0.0025*state[2]*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
   jacobian[3 * 26 + 0] = -1.2e-11*state[3]*exp(-260.0/Temp);
   jacobian[3 * 26 + 1] = -1.9e-13*state[3]*exp(-520.0/Temp);
   jacobian[3 * 26 + 3] = -1.9e-13*state[1]*exp(-520.0/Temp) - 1.2e-11*state[0]*exp(-260.0/Temp);
   jacobian[4 * 26 + 0] = 1.2e-11*state[3]*exp(-260.0/Temp) - 3.3e-12*state[4];
   jacobian[4 * 26 + 1] = 1.9e-13*state[3]*exp(-520.0/Temp);
-  jacobian[4 * 26 + 2] = -0.0025*state[4];
+  jacobian[4 * 26 + 2] = -0.0025*state[4]*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
   jacobian[4 * 26 + 3] = 1.9e-13*state[1]*exp(-520.0/Temp) + 1.2e-11*state[0]*exp(-260.0/Temp);
-  jacobian[4 * 26 + 4] = -2.5e-05*state[10] - 2.5e-05*state[11] - 2.5e-05*state[12] - 2.5e-05*state[13] - 2.5e-05*state[14] - 0.0025*state[2] - 3.3e-12*state[0] - 0.00025*state[15] - 0.00025*state[16] - 0.00025*state[17] - 0.00025*state[18] - 0.00025*state[19];
+  jacobian[4 * 26 + 4] = -2.5e-05*state[10] - 2.5e-05*state[11] - 2.5e-05*state[12] - 2.5e-05*state[13] - 2.5e-05*state[14] - 0.0025*state[2]*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 3.3e-12*state[0] - 0.00025*state[15] - 0.00025*state[16] - 0.00025*state[17] - 0.00025*state[18] - 0.00025*state[19];
   jacobian[4 * 26 + 10] = -2.5e-05*state[4];
   jacobian[4 * 26 + 11] = -2.5e-05*state[4];
   jacobian[4 * 26 + 12] = -2.5e-05*state[4];
@@ -36,8 +38,8 @@ void compute_jacobian_chunk_0(
   jacobian[4 * 26 + 18] = -0.00025*state[4];
   jacobian[4 * 26 + 19] = -0.00025*state[4];
   jacobian[5 * 26 + 0] = 3.3e-12*state[4];
-  jacobian[5 * 26 + 2] = 0.0025*state[4];
-  jacobian[5 * 26 + 4] = 2.5e-05*state[10] + 2.5e-05*state[11] + 2.5e-05*state[12] + 2.5e-05*state[13] + 2.5e-05*state[14] + 0.0025*state[2] + 3.3e-12*state[0] + 0.00025*state[15] + 0.00025*state[16] + 0.00025*state[17] + 0.00025*state[18] + 0.00025*state[19];
+  jacobian[5 * 26 + 2] = 0.0025*state[4]*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
+  jacobian[5 * 26 + 4] = 2.5e-05*state[10] + 2.5e-05*state[11] + 2.5e-05*state[12] + 2.5e-05*state[13] + 2.5e-05*state[14] + 0.0025*state[2]*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) + 3.3e-12*state[0] + 0.00025*state[15] + 0.00025*state[16] + 0.00025*state[17] + 0.00025*state[18] + 0.00025*state[19];
   jacobian[5 * 26 + 10] = 2.5e-05*state[4];
   jacobian[5 * 26 + 11] = 2.5e-05*state[4];
   jacobian[5 * 26 + 12] = 2.5e-05*state[4];

@@ -281,6 +281,30 @@ def parse_mechanism_micm(
             )
         host_interface = HostInterfaceSchema(arrays=arrays)
 
+    # A kinetic reaction may declare an `activation_trigger` naming a runtime
+    # meteorological quantity, e.g. "meteo.cloud_liquid_water > 1.0e-6". When
+    # present, the reaction's rate is gated by a smooth indicator of that
+    # quantity and the generated solver must accept it as an extra per-cell
+    # equilibrium input. Only cloud liquid water is currently supported; an
+    # unrecognized quantity is rejected rather than silently ignored, because a
+    # dropped trigger would run ungated chemistry (the exact failure R1 guards).
+    _TRIGGER_QUANTITIES = {"meteo.cloud_liquid_water": "cloud_liquid_water"}
+    cloud_gated = False
+    for rxn in reactions:
+        trigger = rxn.parameters.get("activation_trigger")
+        if trigger is None:
+            continue
+        quantity = str(trigger).split(">")[0].strip()
+        if quantity not in _TRIGGER_QUANTITIES:
+            raise CompilationError(
+                stage="validation",
+                message=(
+                    f"reaction declares unsupported activation_trigger '{trigger}'; "
+                    f"supported quantities: {sorted(_TRIGGER_QUANTITIES)}"
+                ),
+            )
+        cloud_gated = True
+
     return MechanismDefinition(
         name=name,
         description=data.get("description", ""),
@@ -291,6 +315,7 @@ def parse_mechanism_micm(
         host_interface=host_interface,
         equilibrium_reactions=equilibrium_reactions,
         metadata=data.get("metadata", {}),
+        has_cloud_gated_reaction=cloud_gated,
     )
 
 

@@ -20,6 +20,7 @@ struct HostExecutionParams {
     const double* jvals{nullptr}; ///< Pointer to Cloud-J photolysis rate array
     double temp{288.15};          ///< Temperature in Kelvin (used for mechanisms like GOCART)
     double rh{0.5};               ///< Relative humidity fraction (used for mechanisms like GOCART)
+    double clw{0.0};              ///< Cloud liquid water fraction (used by cloud-gated mechanisms)
     int steps{1};                 ///< Number of integration timesteps
 };
 
@@ -31,7 +32,9 @@ KOKKOS_INLINE_FUNCTION void integrate_cell(SolverKernelsType& solver,
     static const double default_jvals[512] = {0.0};
     const double* jvals_ptr = params.jvals ? params.jvals : default_jvals;
 
-    if constexpr (requires { solver.integrate(params.dt, sub_state, jvals_ptr, params.temp, params.rh); }) {
+    if constexpr (requires { solver.integrate(params.dt, sub_state, jvals_ptr, params.temp, params.rh, params.clw); }) {
+        solver.integrate(params.dt, sub_state, jvals_ptr, params.temp, params.rh, params.clw);
+    } else if constexpr (requires { solver.integrate(params.dt, sub_state, jvals_ptr, params.temp, params.rh); }) {
         solver.integrate(params.dt, sub_state, jvals_ptr, params.temp, params.rh);
     } else {
         solver.integrate(params.dt, sub_state, jvals_ptr);
