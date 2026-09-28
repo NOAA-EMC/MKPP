@@ -414,6 +414,7 @@ def load_environment(path: str | Path) -> EnvironmentDefinition:
         solver_block = {}
     solver_atol = solver_block.get("atol")
     solver_rtol = solver_block.get("rtol")
+    solver_seed = solver_block.get("initial_step_seed")
 
     init_conc = data.get("initial_concentrations", data.get("initial_conditions", data.get("concentrations", {})))
     if not isinstance(init_conc, dict):
@@ -428,5 +429,6 @@ def load_environment(path: str | Path) -> EnvironmentDefinition:
         relative_humidity=rh,
         solver_atol=float(solver_atol) if solver_atol is not None else None,
         solver_rtol=float(solver_rtol) if solver_rtol is not None else None,
+        solver_initial_step_seed=float(solver_seed) if solver_seed is not None else None,
         initial_concentrations=normalized_init,
     )

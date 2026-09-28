@@ -5,6 +5,7 @@ dictionary (Template_Context). Templates receive no Python function
 calls, only pre-computed data.
 """
 
+import math
 import re
 from typing import Any
 
@@ -299,6 +300,25 @@ def build_template_context(
 
     tolerance_arrays = {"atol": atol_values, "rtol": rtol_values}
 
+    # --- Initial-step seed for the adaptive Rosenbrock ramp ---
+    # The generated integrate() starts its first internal substep at
+    # dt = dt_total * seed.  The committed default is the exact literal token
+    # below, so an unset seed reproduces the shipped artifact byte-for-byte.
+    # A raised seed cuts the mandatory growth substeps (cost floor) while the
+    # rejection controller preserves accuracy; it must be finite and positive
+    # or the integrator can stall, so reject anything else loudly.
+    initial_step_seed = "1.0e-6"
+    if isinstance(getattr(mech, "metadata", None), dict):
+        meta_seed = mech.metadata.get("initial_step_seed")
+        if meta_seed is not None:
+            seed_value = float(meta_seed)
+            if not math.isfinite(seed_value) or seed_value <= 0.0:
+                raise ValueError(
+                    f"initial_step_seed must be a finite positive fraction of the "
+                    f"chemistry interval, got {meta_seed!r}"
+                )
+            initial_step_seed = repr(seed_value)
+
     # --- Tableau serialization ---
     tableau_dict = {
         "name": tableau.name,
@@ -361,6 +381,7 @@ def build_template_context(
         "has_photolysis": has_photolysis,
         "num_photolysis": num_photolysis,
         "tolerance_arrays": tolerance_arrays,
+        "initial_step_seed": initial_step_seed,
         "simd_backend": simd_backend,
     }
 

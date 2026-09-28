@@ -173,6 +173,7 @@ class EnvironmentDefinition:
     relative_humidity: float = 0.5
     solver_atol: float | None = None
     solver_rtol: float | None = None
+    solver_initial_step_seed: float | None = None
     initial_concentrations: dict[str, float] = field(default_factory=dict)
 
 

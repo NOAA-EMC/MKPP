@@ -224,6 +224,7 @@ def template_context_strategy(draw):
         "has_photolysis": has_photolysis,
         "num_photolysis": num_photolysis,
         "tolerance_arrays": tolerance_arrays,
+        "initial_step_seed": "1.0e-6",
         "photolysis_reactions": photolysis_reactions,
         "host_interface": None,
         "equilibrium_results": None,
