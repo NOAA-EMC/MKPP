@@ -547,6 +547,16 @@ namespace mkpp::generated::gocart {
       static constexpr int NUM_PHOTOLYSIS = 1;
 
       /**
+       * @brief Initial-step seed for the adaptive Rosenbrock ramp.
+       *
+       * The first internal substep of every integrate() call starts at
+       * dt_total * initial_step_seed.  The compile-time value is baked as the
+       * initializer; a host may override the member before a solve (per
+       * SolverKernels instance) without regenerating this header.
+       */
+      double initial_step_seed = 1.0e-6;
+
+      /**
        * @brief Performs adaptive time-stepping Rosenbrock integration over dt_total.
        *
        * @tparam StateView Kokkos View type for species concentrations [NUM_SPECIES].
@@ -570,9 +580,9 @@ namespace mkpp::generated::gocart {
           const double rejection_factor_decrease = 0.1;
           const double h_min = dt_total * 1.0e-15;
           double t = 0.0;
-          // Match MICM's default initial Rosenbrock step: 1e-6 of the
-          // chemistry interval, with the interval itself as h_max.
-          double dt = dt_total * 1.0e-6;
+          // First substep of the adaptive ramp; the seed member carries the
+          // compile-time default and any host-set runtime override.
+          double dt = dt_total * initial_step_seed;
           bool reject_last_dt = false;
           bool reject_more_dt = false;
 

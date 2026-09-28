@@ -40,17 +40,20 @@ def _minimal_mechanism() -> MechanismDefinition:
     return mech
 
 
-def _rendered_integrate_seed(header_text: str) -> str:
-    """Extract the seed factor from the primary integrate() initial-step line.
+def _rendered_seed_member(header_text: str) -> str:
+    """Extract the baked token from the ``double initial_step_seed = <tok>;`` member.
 
-    The reduction/adjoint variants use ``Kokkos::fmin(dt_total, 1.0)`` and are
-    not the seed-controlled path, so match the ``dt_total * <seed>`` form only.
+    The seed is emitted as a public member of the solver struct so a host can
+    override it at runtime without regenerating; the member's initializer is
+    the compile-time value.  integrate() reads the member, so this is the only
+    place the literal appears on the primary path.
     """
+    prefix = "double initial_step_seed ="
     for line in header_text.splitlines():
         stripped = line.strip()
-        if stripped.startswith("double dt = dt_total *"):
-            return stripped[len("double dt = dt_total *") :].rstrip(";").strip()
-    raise AssertionError("no 'double dt = dt_total * <seed>' initial-step line found in header")
+        if stripped.startswith(prefix):
+            return stripped[len(prefix) :].rstrip(";").strip()
+    raise AssertionError("no 'double initial_step_seed = <token>;' member found in header")
 
 
 class TestParserReadsSeed:
@@ -100,7 +103,7 @@ class TestHeaderSeed:
         with tempfile.TemporaryDirectory() as tmpdir:
             results = generate_headers(mech, out_dir=tmpdir, solver_name="ros3")
             header_text = Path(results["header"]).read_text()
-        assert _rendered_integrate_seed(header_text) == "1.0e-6"
+        assert _rendered_seed_member(header_text) == "1.0e-6"
 
     def test_override_header_uses_seed(self):
         mech = _minimal_mechanism()
@@ -108,4 +111,30 @@ class TestHeaderSeed:
         with tempfile.TemporaryDirectory() as tmpdir:
             results = generate_headers(mech, out_dir=tmpdir, solver_name="ros3")
             header_text = Path(results["header"]).read_text()
-        assert _rendered_integrate_seed(header_text) == "0.01"
+        assert _rendered_seed_member(header_text) == "0.01"
+
+
+class TestRuntimeSeedMember:
+    """The baked seed doubles as a public member initializer so a host can
+    override it per solve without regenerating the artifact."""
+
+    def _header(self, metadata=None) -> str:
+        mech = _minimal_mechanism()
+        if metadata:
+            mech.metadata = metadata
+        with tempfile.TemporaryDirectory() as tmpdir:
+            results = generate_headers(mech, out_dir=tmpdir, solver_name="ros3")
+            return Path(results["header"]).read_text()
+
+    def test_default_header_declares_member_with_baked_literal(self):
+        assert "double initial_step_seed = 1.0e-6;" in self._header()
+
+    def test_override_header_bakes_configured_value(self):
+        assert "double initial_step_seed = 0.01;" in self._header({"initial_step_seed": 0.01})
+
+    def test_integrate_reads_the_member_not_a_literal(self):
+        # integrate() must consume the member so a runtime override takes
+        # effect; the literal may appear ONLY in the member initializer.
+        text = self._header()
+        assert "double dt = dt_total * initial_step_seed;" in text
+        assert "double dt = dt_total * 1.0e-6;" not in text
