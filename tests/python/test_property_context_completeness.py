@@ -170,6 +170,7 @@ REQUIRED_KEYS = [
     "permutation",
     "adjoint_enabled",
     "has_equilibrium",
+    "has_cloud_gated",
     "has_photolysis",
     "num_photolysis",
     "tolerance_arrays",

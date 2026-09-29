@@ -5,11 +5,15 @@
 namespace mkpp::generated::{{ mechanism_name }}::detail {
 void compute_{{ compiled_kernel }}_chunk_{{ compiled_chunk_index }}(
     const double* state, double* {% if compiled_kernel == "rates" %}rates{% else %}jacobian{% endif %},
-    const double* jvals, double temp, double rh) {
+    const double* jvals, double temp, double rh{% if has_cloud_gated %}, double clw{% endif %}) {
 {% if has_equilibrium %}
   const double Temp = temp;
   const double RH = rh;
   (void)RH;
+{% if has_cloud_gated %}
+  const double CLW = clw;
+  (void)CLW;  // Referenced only by the gated reaction's chunk.
+{% endif %}
 {% else %}
   (void)temp;
   (void)rh;

@@ -70,7 +70,12 @@ namespace mkpp::generated::{{ mechanism_name }} {
   enum class EquilibriumInput : int {
       Temperature = 0,
       RelativeHumidity = 1,
+{% if has_cloud_gated %}
+      CloudLiquidWater = 2,
+      COUNT = 3
+{% else %}
       COUNT = 2
+{% endif %}
   };
 
 {% endif %}
@@ -99,11 +104,11 @@ namespace mkpp::generated::{{ mechanism_name }} {
   namespace detail {
 {% for chunk in compiled_rate_chunks %}
   void compute_rates_chunk_{{ loop.index0 }}(const double* state, double* rates,
-                                              const double* jvals, double temp, double rh);
+                                              const double* jvals, double temp, double rh{% if has_cloud_gated %}, double clw{% endif %});
 {% endfor %}
 {% for chunk in compiled_jacobian_chunks %}
   void compute_jacobian_chunk_{{ loop.index0 }}(const double* state, double* jacobian,
-                                                 const double* jvals, double temp, double rh);
+                                                 const double* jvals, double temp, double rh{% if has_cloud_gated %}, double clw{% endif %});
 {% endfor %}
 {% for chunk in compiled_lu_chunks %}
   void factorize_lu_chunk_{{ loop.index0 }}(const double* w, double* lu);

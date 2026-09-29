@@ -5,16 +5,18 @@
 namespace mkpp::generated::gocart::detail {
 void compute_rates_chunk_0(
     const double* state, double* rates,
-    const double* jvals, double temp, double rh) {
+    const double* jvals, double temp, double rh, double clw) {
   const double Temp = temp;
   const double RH = rh;
   (void)RH;
+  const double CLW = clw;
+  (void)CLW;  // Referenced only by the gated reaction's chunk.
   rates[0] = -1.2e-11*state[3]*state[0]*exp(-260.0/Temp) + 2.0*state[2]*jvals[0] - 3.3e-12*state[0]*state[4];
   rates[1] = -1.9e-13*state[3]*state[1]*exp(-520.0/Temp);
-  rates[2] = -0.0025*state[2]*state[4] - 1.0*state[2]*jvals[0];
+  rates[2] = -0.0025*state[2]*state[4]*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 1.0*state[2]*jvals[0];
   rates[3] = -1.9e-13*state[3]*state[1]*exp(-520.0/Temp) - 1.2e-11*state[3]*state[0]*exp(-260.0/Temp);
-  rates[4] = 1.9e-13*state[3]*state[1]*exp(-520.0/Temp) + 1.2e-11*state[3]*state[0]*exp(-260.0/Temp) - 2.5e-05*state[10]*state[4] - 2.5e-05*state[11]*state[4] - 2.5e-05*state[12]*state[4] - 2.5e-05*state[13]*state[4] - 2.5e-05*state[14]*state[4] - 0.0025*state[2]*state[4] - 3.3e-12*state[0]*state[4] - 0.00025*state[4]*state[15] - 0.00025*state[4]*state[16] - 0.00025*state[4]*state[17] - 0.00025*state[4]*state[18] - 0.00025*state[4]*state[19];
-  rates[5] = 2.5e-05*state[10]*state[4] + 2.5e-05*state[11]*state[4] + 2.5e-05*state[12]*state[4] + 2.5e-05*state[13]*state[4] + 2.5e-05*state[14]*state[4] + 0.0025*state[2]*state[4] + 3.3e-12*state[0]*state[4] + 0.00025*state[4]*state[15] + 0.00025*state[4]*state[16] + 0.00025*state[4]*state[17] + 0.00025*state[4]*state[18] + 0.00025*state[4]*state[19];
+  rates[4] = 1.9e-13*state[3]*state[1]*exp(-520.0/Temp) + 1.2e-11*state[3]*state[0]*exp(-260.0/Temp) - 2.5e-05*state[10]*state[4] - 2.5e-05*state[11]*state[4] - 2.5e-05*state[12]*state[4] - 2.5e-05*state[13]*state[4] - 2.5e-05*state[14]*state[4] - 0.0025*state[2]*state[4]*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 3.3e-12*state[0]*state[4] - 0.00025*state[15]*state[4] - 0.00025*state[16]*state[4] - 0.00025*state[17]*state[4] - 0.00025*state[18]*state[4] - 0.00025*state[19]*state[4];
+  rates[5] = 2.5e-05*state[10]*state[4] + 2.5e-05*state[11]*state[4] + 2.5e-05*state[12]*state[4] + 2.5e-05*state[13]*state[4] + 2.5e-05*state[14]*state[4] + 0.0025*state[2]*state[4]*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) + 3.3e-12*state[0]*state[4] + 0.00025*state[15]*state[4] + 0.00025*state[16]*state[4] + 0.00025*state[17]*state[4] + 0.00025*state[18]*state[4] + 0.00025*state[19]*state[4];
   rates[6] = -5e-06*state[6];
   rates[7] = 5e-06*state[6];
   rates[8] = -5e-06*state[8];
