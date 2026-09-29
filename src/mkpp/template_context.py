@@ -314,8 +314,7 @@ def build_template_context(
             seed_value = float(meta_seed)
             if not math.isfinite(seed_value) or seed_value <= 0.0:
                 raise ValueError(
-                    f"initial_step_seed must be a finite positive fraction of the "
-                    f"chemistry interval, got {meta_seed!r}"
+                    f"initial_step_seed must be a finite positive fraction of the " f"chemistry interval, got {meta_seed!r}"
                 )
             initial_step_seed = repr(seed_value)
 

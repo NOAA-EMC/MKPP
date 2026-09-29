@@ -157,14 +157,10 @@ def _parse_trigger_threshold(trigger, reaction_idx: int) -> float:
         value = float(match.group(1))
     except ValueError as exc:  # pragma: no cover - guarded by regex above
         raise ValueError(
-            f"HETEROGENEOUS reaction {reaction_idx} has a non-numeric "
-            f"activation_trigger threshold: {trigger!r}"
+            f"HETEROGENEOUS reaction {reaction_idx} has a non-numeric " f"activation_trigger threshold: {trigger!r}"
         ) from exc
     if value != value or value in (float("inf"), float("-inf")):
-        raise ValueError(
-            f"HETEROGENEOUS reaction {reaction_idx} has a non-finite "
-            f"activation_trigger threshold: {trigger!r}"
-        )
+        raise ValueError(f"HETEROGENEOUS reaction {reaction_idx} has a non-finite " f"activation_trigger threshold: {trigger!r}")
     return value
 
 

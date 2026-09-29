@@ -20,7 +20,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from mkpp.codegen import generate_headers
 from mkpp.model import AerosolRepresentation, MechanismDefinition, PhaseMode, SpeciesDefinition
 from mkpp.parser import load_environment
