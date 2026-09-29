@@ -97,3 +97,4 @@ nav:
       - End-to-End Compiler Pipeline: explanation/mkpp-end-to-end-architecture.md
       - AOT Symbolic LU Architecture: explanation/aot-symbolic-lu-architecture.md
       - Reaction Kinetics & Unified Jacobian: explanation/unified-jacobian-and-reaction-kinetics.md
+      - CRACMM2 Port Assessment: explanation/cracmm2-port-assessment.md
