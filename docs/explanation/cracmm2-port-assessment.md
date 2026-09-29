@@ -59,16 +59,19 @@ current imported snapshot, not the full set of CMAQ aerosol processes.
 
 ## Missing or unconnected physical processes
 
-4. **Inorganic aerosol thermodynamics.** CMAQ CRACMM uses ISORROPIA II for
-   equilibrium among sulfate, nitrate, ammonium, chloride, sodium, potassium,
-   calcium, magnesium, and aerosol water. The MKPP
-   [equilibrium registry](../../src/mkpp/equilibrium/registry.py) has a
-   simplified NH4/NO3/SO4 model, not the full
-   [ISORROPIA II system](https://acp.copernicus.org/articles/7/4639/2007/).
-   The CRACMM2 catalog declares no EQUILIBRIUM reactions invoking even that
-   simplified model. Choose a validated CAT-Chem thermodynamics provider or
-   extend and validate MKPP's model across composition, RH, and phase regimes;
-   reconcile gas and modal aerosol totals without duplicate partitioning.
+4. **Connect the existing C++ ISORROPIA-Lite.** MKPP pins a standalone
+   [C++ ISORROPIA-Lite submodule](../../src/isorropialite/README.md) with a
+   [forward/reverse solver](../../src/isorropialite/include/Isorropia/Solver.hpp)
+   for Na, sulfate, ammonia, nitrate, chloride, Ca, K, Mg, and aerosol water.
+   Its [C interface](../../src/isorropialite/include/Isorropia/Isorropia.h)
+   also exposes gas NH3, HNO3, and HCl and liquid/solid diagnostics. This is
+   distinct from the narrower NH4/NO3/SO4 symbolic model in MKPP's
+   [equilibrium registry](../../src/mkpp/equilibrium/registry.py), which emits
+   inline C++ only when a mechanism declares EQUILIBRIUM reactions. CRACMM2
+   declares none; its generated kernel neither calls the submodule nor embeds
+   its thermodynamics. Wire the pinned C++ solver into the host process and
+   establish scientific parity with CMAQ's ISORROPIA II configuration rather
+   than treating the two implementations as interchangeable.
 
 5. **Condensation, evaporation, and nucleation.** CRACMM's condensable
    precursors and particle species do not implement CMAQ's inorganic
@@ -94,6 +97,63 @@ current imported snapshot, not the full set of CMAQ aerosol processes.
    Inventory every named forcing, implement or provide its correct calculation,
    and compare values over day/night and relevant meteorological ranges. Do
    not substitute zero, guessed constants, or unrelated photolysis slots.
+
+## Proposed CRACMM2 to ISORROPIA-Lite contract
+
+The following is an integration design, **not an implemented MKPP interface**:
+
+1. **Use one owner for inorganic equilibrium.** Link the pinned `isorropia`
+   CMake target into a CAT-Chem/MKPP host adapter and invoke
+   `Isorropia::Solver::solve(Input, State)` per cell, or use
+   `isorropia_solve_c` at a C/Fortran boundary. The existing
+   [batched helper](../../src/isorropialite/include/Isorropia/BatchedSolver.hpp)
+   loops over cells on the host; it is not evidence of a GPU-resident Kokkos
+   kernel. Keep the narrow inline NH4/NO3/SO4 relaxation disabled for these
+   same components to avoid equilibrating them twice.
+
+2. **Assemble component totals with an explicit unit and phase map.** Populate
+   `Input::w` in its declared order: Na, H2SO4 (total sulfate), NH3 (total
+   reduced ammonia), HNO3 (total inorganic nitrate), HCl (total chloride),
+   Ca, K, Mg. Start from CRACMM2 gas `NH3`, `HNO3`, `HCL`, `SULF` and particle
+   `ANA`, `ASO4`, `ANH4`, `ANO3`, `ACL`, `ACA`, `AK`, `AMG`.
+   `SULF` is the condensable sulfuric-acid pool; do not equilibrate `SO2` as
+   sulfate. Verify each component's host-state mapping before enabling the
+   coupling. Convert MKPP/CAT-Chem concentrations to the solver's
+   declared micromoles per cubic meter of air or micrograms per cubic meter of
+   air consistently, using species molecular weights; do not add gas and
+   particle values with different units. Provide temperature in K and RH as
+   a fraction; select forward mode (`iprob = 0`) for total-component inputs.
+
+3. **Return a conserving gas/particle update.** Use the solver's aerosol
+   component and liquid/solid results and its gas `gnh3`, `ghno3`, `ghcl` to
+   update both sides of each partition, without creating or losing N, S, Cl,
+   or cations. Translate `State::water` (kg/m3 of air), ion molalities, and
+   hydrogen activity into aerosol-water and acidity diagnostics with explicit
+   conversions; reconcile `AH2O` and organic-water `AORGH2O` so water is not
+   counted twice. CRACMM2's `ASO4`, `ANO3`, and `ANH4` are aggregate catalog
+   names, not a complete CMAQ modal allocation: CAT-Chem must own any size-bin
+   mapping and conserve totals when writing them back. Check solver errors,
+   finite/nonnegative outputs, charge balance, and per-cell mass closure.
+
+4. **Schedule rate feedback without duplicating fluxes.** After the gas-phase
+   kinetics and sources update inorganic totals, compute equilibrium, write
+   back gas and particle states, then refresh aerosol water, acidity, size,
+   and surface area before calculating N2O5/IEPOX and other heterogeneous
+   rates. Choose a documented ordering or coupled iteration for chemistry,
+   equilibrium, and microphysics at each timestep; test timestep sensitivity.
+   ISORROPIA-Lite does not itself supply nucleation, organic absorptive
+   partitioning, or every CMAQ uptake coefficient. Calling it outside the
+   ODE also does not add its derivatives to the MKPP unified Jacobian; a truly
+   implicit coupled solve would require consistent residuals and derivatives
+   for the same component totals.
+
+5. **Demonstrate CMAQ-ready behavior, not just a working call.** Compare
+   forward/reverse settings, water/organic-water assumptions, dry versus
+   metastable/solid regimes, sea-salt and dust inputs, modal redistribution,
+   and low-RH/acidic cases against the CMAQ-ready CRACMM2 configuration. The
+   submodule's [regression report](../../src/isorropialite/README.md) describes
+   comparison with its legacy Fortran reference; that is useful but does not
+   establish end-to-end equivalence with CMAQ's aerosol chemistry.
 
 ## CAT-Chem and UFS-Chem integration
 
