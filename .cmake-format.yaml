@@ -1,0 +1,9 @@
+# cmake-format walks up from each listfile to the filesystem root looking for a
+# config, then falls back to its built-in defaults. Checked out standalone (as
+# CI does), MKPP has no parent config to inherit, so it would default to an
+# 80-column width and reflow this tree. The listfiles are authored at 100
+# columns to match the parent builds that consume MKPP via add_subdirectory, so
+# pin the width here to keep the formatting gate identical in standalone CI and
+# in-tree builds.
+format:
+  line_width: 100

@@ -6,7 +6,7 @@
     "migration": "legacy-mkpp-yaml-to-openatmos-v1",
     "mkpp_mechanism_id": "gocart",
     "photolysis_host_forcing_expressions": {
-      "j_gocart.yaml_0006": "1e-05"
+      "jh2o2": "1e-05"
     }
   },
   "name": "GOCART_Mechanism",
@@ -139,7 +139,7 @@
     },
     {
       "gas phase": "gas",
-      "name": "j_gocart.yaml_0006",
+      "name": "jh2o2",
       "products": [
         {
           "coefficient": 2.0,
@@ -290,7 +290,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS1"
+          "species name": "SEAS1"
         }
       ],
       "reactants": [
@@ -300,7 +300,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS1"
+          "species name": "SEAS1"
         }
       ],
       "type": "HETEROGENEOUS"
@@ -315,7 +315,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS2"
+          "species name": "SEAS2"
         }
       ],
       "reactants": [
@@ -325,7 +325,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS2"
+          "species name": "SEAS2"
         }
       ],
       "type": "HETEROGENEOUS"
@@ -340,7 +340,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS3"
+          "species name": "SEAS3"
         }
       ],
       "reactants": [
@@ -350,7 +350,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS3"
+          "species name": "SEAS3"
         }
       ],
       "type": "HETEROGENEOUS"
@@ -365,7 +365,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS4"
+          "species name": "SEAS4"
         }
       ],
       "reactants": [
@@ -375,7 +375,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS4"
+          "species name": "SEAS4"
         }
       ],
       "type": "HETEROGENEOUS"
@@ -390,7 +390,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS5"
+          "species name": "SEAS5"
         }
       ],
       "reactants": [
@@ -400,7 +400,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS5"
+          "species name": "SEAS5"
         }
       ],
       "type": "HETEROGENEOUS"
@@ -540,7 +540,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS1"
+          "species name": "SEAS1"
         }
       ],
       "reactants": [
@@ -550,7 +550,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS1"
+          "species name": "SEAS1"
         }
       ],
       "type": "HETEROGENEOUS"
@@ -565,7 +565,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS2"
+          "species name": "SEAS2"
         }
       ],
       "reactants": [
@@ -575,7 +575,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS2"
+          "species name": "SEAS2"
         }
       ],
       "type": "HETEROGENEOUS"
@@ -590,7 +590,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS3"
+          "species name": "SEAS3"
         }
       ],
       "reactants": [
@@ -600,7 +600,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS3"
+          "species name": "SEAS3"
         }
       ],
       "type": "HETEROGENEOUS"
@@ -615,7 +615,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS4"
+          "species name": "SEAS4"
         }
       ],
       "reactants": [
@@ -625,7 +625,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS4"
+          "species name": "SEAS4"
         }
       ],
       "type": "HETEROGENEOUS"
@@ -640,7 +640,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS5"
+          "species name": "SEAS5"
         }
       ],
       "reactants": [
@@ -650,7 +650,7 @@
         },
         {
           "coefficient": 1.0,
-          "species name": "SS5"
+          "species name": "SEAS5"
         }
       ],
       "type": "HETEROGENEOUS"
@@ -751,19 +751,19 @@
       "name": "DUST5"
     },
     {
-      "name": "SS1"
+      "name": "SEAS1"
     },
     {
-      "name": "SS2"
+      "name": "SEAS2"
     },
     {
-      "name": "SS3"
+      "name": "SEAS3"
     },
     {
-      "name": "SS4"
+      "name": "SEAS4"
     },
     {
-      "name": "SS5"
+      "name": "SEAS5"
     },
     {
       "name": "HNO3"

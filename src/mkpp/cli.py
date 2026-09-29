@@ -232,6 +232,8 @@ def run_compiler(
             mech.metadata["atol"] = [env.solver_atol] * len(mech.species)
         if env.solver_rtol is not None:
             mech.metadata["rtol"] = [env.solver_rtol] * len(mech.species)
+        if env.solver_initial_step_seed is not None:
+            mech.metadata["initial_step_seed"] = env.solver_initial_step_seed
 
         # --- Validation stage ---
         _verbose_log("validation", "Validating mechanism schema and constraints", verbose)

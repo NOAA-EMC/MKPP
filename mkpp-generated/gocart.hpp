@@ -25,11 +25,11 @@ namespace mkpp::generated::gocart {
       DUST3 = 12,
       DUST4 = 13,
       DUST5 = 14,
-      SS1 = 15,
-      SS2 = 16,
-      SS3 = 17,
-      SS4 = 18,
-      SS5 = 19,
+      SEAS1 = 15,
+      SEAS2 = 16,
+      SEAS3 = 17,
+      SEAS4 = 18,
+      SEAS5 = 19,
       HNO3 = 20,
       NH3 = 21,
       NH4a = 22,
@@ -43,7 +43,8 @@ namespace mkpp::generated::gocart {
   enum class EquilibriumInput : int {
       Temperature = 0,
       RelativeHumidity = 1,
-      COUNT = 2
+      CloudLiquidWater = 2,
+      COUNT = 3
   };
 
 #ifdef MKPP_ENABLE_ADJOINT
@@ -62,9 +63,9 @@ namespace mkpp::generated::gocart {
   // This declaration-only boundary keeps host-model translation units small.
   namespace detail {
   void compute_rates_chunk_0(const double* state, double* rates,
-                                              const double* jvals, double temp, double rh);
+                                              const double* jvals, double temp, double rh, double clw);
   void compute_jacobian_chunk_0(const double* state, double* jacobian,
-                                                 const double* jvals, double temp, double rh);
+                                                 const double* jvals, double temp, double rh, double clw);
   void factorize_lu_chunk_0(const double* w, double* lu);
   void solve_lu(const double* lu, const double* rhs, double* solution);
   void factorize_plan(const double* w, double* lu);
@@ -83,8 +84,8 @@ namespace mkpp::generated::gocart {
        * @param jvals Array of photolysis rate constants [NUM_PHOTOLYSIS].
        */
       template <class StateView, class RateView>
-      KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, const double* jvals, const double temp, const double rh) const {
-          detail::compute_rates_chunk_0(state.data(), F_block.data(), jvals, temp, rh);
+      KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, const double* jvals, const double temp, const double rh, const double clw) const {
+          detail::compute_rates_chunk_0(state.data(), F_block.data(), jvals, temp, rh, clw);
       }
 
       /**
@@ -97,16 +98,17 @@ namespace mkpp::generated::gocart {
        * @param jvals Array of photolysis rate constants [NUM_PHOTOLYSIS].
        */
       template <class StateView, class JacView>
-      KOKKOS_INLINE_FUNCTION void compute_jacobian(const StateView& state, JacView& J_block, const double* jvals, const double temp, const double rh) const {
-          detail::compute_jacobian_chunk_0(state.data(), J_block.data(), jvals, temp, rh);
+      KOKKOS_INLINE_FUNCTION void compute_jacobian(const StateView& state, JacView& J_block, const double* jvals, const double temp, const double rh, const double clw) const {
+          detail::compute_jacobian_chunk_0(state.data(), J_block.data(), jvals, temp, rh, clw);
       }
 
 #ifdef MKPP_ENABLE_ADJOINT
       template <class StateView, class JacView>
-      KOKKOS_INLINE_FUNCTION void compute_adjoint(const StateView& state, JacView& J_adj_block, const double* jvals, const double temp, const double rh) const {
+      KOKKOS_INLINE_FUNCTION void compute_adjoint(const StateView& state, JacView& J_adj_block, const double* jvals, const double temp, const double rh, const double clw) const {
           const double Temp = temp;
           const double RH = rh;
           (void)RH;  // Reserved for future deliquescence modeling
+          const double CLW = clw;
           // --- Sparse Analytical Adjoint Jacobian Entries J_adj_block(i, j) = J^T(i, j) ---
           // J^T(OH, OH): d(d[OH]/dt) / d[OH]
           J_adj_block(0, 0) = -1.2e-11*state(3)*exp(-260.0/Temp) - 3.3e-12*state(4);
@@ -125,11 +127,11 @@ namespace mkpp::generated::gocart {
           // J^T(H2O2, OH): d(d[OH]/dt) / d[H2O2]
           J_adj_block(2, 0) = 2.0*jvals[0];
           // J^T(H2O2, H2O2): d(d[H2O2]/dt) / d[H2O2]
-          J_adj_block(2, 2) = -0.0025*state(4) - 1.0*jvals[0];
+          J_adj_block(2, 2) = -0.0025*state(4)*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 1.0*jvals[0];
           // J^T(H2O2, SO2): d(d[SO2]/dt) / d[H2O2]
-          J_adj_block(2, 4) = -0.0025*state(4);
+          J_adj_block(2, 4) = -0.0025*state(4)*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
           // J^T(H2O2, SO4): d(d[SO4]/dt) / d[H2O2]
-          J_adj_block(2, 5) = 0.0025*state(4);
+          J_adj_block(2, 5) = 0.0025*state(4)*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
           // J^T(DMS, OH): d(d[OH]/dt) / d[DMS]
           J_adj_block(3, 0) = -1.2e-11*state(0)*exp(-260.0/Temp);
           // J^T(DMS, NO3): d(d[NO3]/dt) / d[DMS]
@@ -141,11 +143,11 @@ namespace mkpp::generated::gocart {
           // J^T(SO2, OH): d(d[OH]/dt) / d[SO2]
           J_adj_block(4, 0) = -3.3e-12*state(0);
           // J^T(SO2, H2O2): d(d[H2O2]/dt) / d[SO2]
-          J_adj_block(4, 2) = -0.0025*state(2);
+          J_adj_block(4, 2) = -0.0025*state(2)*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
           // J^T(SO2, SO2): d(d[SO2]/dt) / d[SO2]
-          J_adj_block(4, 4) = -2.5e-05*state(10) - 2.5e-05*state(11) - 2.5e-05*state(12) - 2.5e-05*state(13) - 2.5e-05*state(14) - 0.0025*state(2) - 3.3e-12*state(0) - 0.00025*state(15) - 0.00025*state(16) - 0.00025*state(17) - 0.00025*state(18) - 0.00025*state(19);
+          J_adj_block(4, 4) = -2.5e-05*state(10) - 2.5e-05*state(11) - 2.5e-05*state(12) - 2.5e-05*state(13) - 2.5e-05*state(14) - 0.0025*state(2)*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 3.3e-12*state(0) - 0.00025*state(15) - 0.00025*state(16) - 0.00025*state(17) - 0.00025*state(18) - 0.00025*state(19);
           // J^T(SO2, SO4): d(d[SO4]/dt) / d[SO2]
-          J_adj_block(4, 5) = 2.5e-05*state(10) + 2.5e-05*state(11) + 2.5e-05*state(12) + 2.5e-05*state(13) + 2.5e-05*state(14) + 0.0025*state(2) + 3.3e-12*state(0) + 0.00025*state(15) + 0.00025*state(16) + 0.00025*state(17) + 0.00025*state(18) + 0.00025*state(19);
+          J_adj_block(4, 5) = 2.5e-05*state(10) + 2.5e-05*state(11) + 2.5e-05*state(12) + 2.5e-05*state(13) + 2.5e-05*state(14) + 0.0025*state(2)*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) + 3.3e-12*state(0) + 0.00025*state(15) + 0.00025*state(16) + 0.00025*state(17) + 0.00025*state(18) + 0.00025*state(19);
           // J^T(SO2, HNO3): d(d[HNO3]/dt) / d[SO2]
           J_adj_block(4, 20) = (-500000.0*((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 40.0)/sqrt(pow((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 40.0, 2) + 1) - 500000.0)*((1.0/2.0)*((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 20.0)/sqrt(pow((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(-2 - (2*state(20) - 2*state(21) - 2*state(22) + 2*state(23) + 2*state(24) + 2*state(25) + 4*state(4) + 4*state(5))/sqrt(pow(-state(20) + state(21) + state(22) - state(23) - state(24) - state(25) - 2*state(4) - 2*state(5), 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*state(20) + (1.0/2.0)*state(21) + (1.0/2.0)*state(22) + (1.0/2.0)*state(23) + (1.0/2.0)*state(24) + (1.0/2.0)*state(25) - state(4) - state(5) - 1.0/2.0*sqrt(pow(-state(20) + state(21) + state(22) - state(23) - state(24) - state(25) - 2*state(4) - 2*state(5), 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*state(20) + (1.0/2.0)*state(21) + (1.0/2.0)*state(22) + (1.0/2.0)*state(23) + (1.0/2.0)*state(24) + (1.0/2.0)*state(25) - state(4) - state(5) - 1.0/2.0*sqrt(pow(-state(20) + state(21) + state(22) - state(23) - state(24) - state(25) - 2*state(4) - 2*state(5), 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 1.0/2.0 - 1.0/4.0*(2*state(20) - 2*state(21) - 2*state(22) + 2*state(23) + 2*state(24) + 2*state(25) + 4*state(4) + 4*state(5))/sqrt(pow(-state(20) + state(21) + state(22) - state(23) - state(24) - state(25) - 2*state(4) - 2*state(5), 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) - (500000.0*((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 40.0)/sqrt(pow((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 40.0, 2) + 1) + 500000.0)*((10.0*state(21) + 10.0*state(22))*pow((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 20.0, 2)/(pow(pow((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 20.0, 2) + 1, 3.0/2.0)*pow(state(4) + state(5) + 1e-30, 2)) - (10.0*state(21) + 10.0*state(22))/(sqrt(pow((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 20.0, 2) + 1)*pow(state(4) + state(5) + 1e-30, 2)))*((1.0/4.0)*state(20) + (1.0/4.0)*state(21) + (1.0/4.0)*state(22) + (1.0/4.0)*state(23) + (1.0/4.0)*state(24) + (1.0/4.0)*state(25) - 1.0/2.0*state(4) - 1.0/2.0*state(5) - 1.0/4.0*sqrt(pow(-state(20) + state(21) + state(22) - state(23) - state(24) - state(25) - 2*state(4) - 2*state(5), 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*state(20) + (1.0/2.0)*state(21) + (1.0/2.0)*state(22) + (1.0/2.0)*state(23) + (1.0/2.0)*state(24) + (1.0/2.0)*state(25) - state(4) - state(5) - 1.0/2.0*sqrt(pow(-state(20) + state(21) + state(22) - state(23) - state(24) - state(25) - 2*state(4) - 2*state(5), 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20)) - (500000.0*((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 20.0)/sqrt(pow((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 20.0, 2) + 1) + 500000.0)*((10.0*state(21) + 10.0*state(22))*pow((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 40.0, 2)/(pow(pow((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*pow(state(4) + state(5) + 1e-30, 2)) - (10.0*state(21) + 10.0*state(22))/(sqrt(pow((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 40.0, 2) + 1)*pow(state(4) + state(5) + 1e-30, 2)))*((1.0/4.0)*state(20) + (1.0/4.0)*state(21) + (1.0/4.0)*state(22) + (1.0/4.0)*state(23) + (1.0/4.0)*state(24) + (1.0/4.0)*state(25) - 1.0/2.0*state(4) - 1.0/2.0*state(5) - 1.0/4.0*sqrt(pow(-state(20) + state(21) + state(22) - state(23) - state(24) - state(25) - 2*state(4) - 2*state(5), 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*state(20) + (1.0/2.0)*state(21) + (1.0/2.0)*state(22) + (1.0/2.0)*state(23) + (1.0/2.0)*state(24) + (1.0/2.0)*state(25) - state(4) - state(5) - 1.0/2.0*sqrt(pow(-state(20) + state(21) + state(22) - state(23) - state(24) - state(25) - 2*state(4) - 2*state(5), 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
           // J^T(SO2, NH3): d(d[NH3]/dt) / d[SO2]
@@ -218,45 +220,45 @@ namespace mkpp::generated::gocart {
           J_adj_block(14, 20) = -0.025*state(20);
           // J^T(DUST5, NO3an2): d(d[NO3an2]/dt) / d[DUST5]
           J_adj_block(14, 24) = 0.025*state(20);
-          // J^T(SS1, SO2): d(d[SO2]/dt) / d[SS1]
+          // J^T(SEAS1, SO2): d(d[SO2]/dt) / d[SEAS1]
           J_adj_block(15, 4) = -0.00025*state(4);
-          // J^T(SS1, SO4): d(d[SO4]/dt) / d[SS1]
+          // J^T(SEAS1, SO4): d(d[SO4]/dt) / d[SEAS1]
           J_adj_block(15, 5) = 0.00025*state(4);
-          // J^T(SS1, HNO3): d(d[HNO3]/dt) / d[SS1]
+          // J^T(SEAS1, HNO3): d(d[HNO3]/dt) / d[SEAS1]
           J_adj_block(15, 20) = -0.025*state(20);
-          // J^T(SS1, NO3an3): d(d[NO3an3]/dt) / d[SS1]
+          // J^T(SEAS1, NO3an3): d(d[NO3an3]/dt) / d[SEAS1]
           J_adj_block(15, 25) = 0.025*state(20);
-          // J^T(SS2, SO2): d(d[SO2]/dt) / d[SS2]
+          // J^T(SEAS2, SO2): d(d[SO2]/dt) / d[SEAS2]
           J_adj_block(16, 4) = -0.00025*state(4);
-          // J^T(SS2, SO4): d(d[SO4]/dt) / d[SS2]
+          // J^T(SEAS2, SO4): d(d[SO4]/dt) / d[SEAS2]
           J_adj_block(16, 5) = 0.00025*state(4);
-          // J^T(SS2, HNO3): d(d[HNO3]/dt) / d[SS2]
+          // J^T(SEAS2, HNO3): d(d[HNO3]/dt) / d[SEAS2]
           J_adj_block(16, 20) = -0.025*state(20);
-          // J^T(SS2, NO3an1): d(d[NO3an1]/dt) / d[SS2]
+          // J^T(SEAS2, NO3an1): d(d[NO3an1]/dt) / d[SEAS2]
           J_adj_block(16, 23) = 0.025*state(20);
-          // J^T(SS3, SO2): d(d[SO2]/dt) / d[SS3]
+          // J^T(SEAS3, SO2): d(d[SO2]/dt) / d[SEAS3]
           J_adj_block(17, 4) = -0.00025*state(4);
-          // J^T(SS3, SO4): d(d[SO4]/dt) / d[SS3]
+          // J^T(SEAS3, SO4): d(d[SO4]/dt) / d[SEAS3]
           J_adj_block(17, 5) = 0.00025*state(4);
-          // J^T(SS3, HNO3): d(d[HNO3]/dt) / d[SS3]
+          // J^T(SEAS3, HNO3): d(d[HNO3]/dt) / d[SEAS3]
           J_adj_block(17, 20) = -0.025*state(20);
-          // J^T(SS3, NO3an2): d(d[NO3an2]/dt) / d[SS3]
+          // J^T(SEAS3, NO3an2): d(d[NO3an2]/dt) / d[SEAS3]
           J_adj_block(17, 24) = 0.025*state(20);
-          // J^T(SS4, SO2): d(d[SO2]/dt) / d[SS4]
+          // J^T(SEAS4, SO2): d(d[SO2]/dt) / d[SEAS4]
           J_adj_block(18, 4) = -0.00025*state(4);
-          // J^T(SS4, SO4): d(d[SO4]/dt) / d[SS4]
+          // J^T(SEAS4, SO4): d(d[SO4]/dt) / d[SEAS4]
           J_adj_block(18, 5) = 0.00025*state(4);
-          // J^T(SS4, HNO3): d(d[HNO3]/dt) / d[SS4]
+          // J^T(SEAS4, HNO3): d(d[HNO3]/dt) / d[SEAS4]
           J_adj_block(18, 20) = -0.025*state(20);
-          // J^T(SS4, NO3an3): d(d[NO3an3]/dt) / d[SS4]
+          // J^T(SEAS4, NO3an3): d(d[NO3an3]/dt) / d[SEAS4]
           J_adj_block(18, 25) = 0.025*state(20);
-          // J^T(SS5, SO2): d(d[SO2]/dt) / d[SS5]
+          // J^T(SEAS5, SO2): d(d[SO2]/dt) / d[SEAS5]
           J_adj_block(19, 4) = -0.00025*state(4);
-          // J^T(SS5, SO4): d(d[SO4]/dt) / d[SS5]
+          // J^T(SEAS5, SO4): d(d[SO4]/dt) / d[SEAS5]
           J_adj_block(19, 5) = 0.00025*state(4);
-          // J^T(SS5, HNO3): d(d[HNO3]/dt) / d[SS5]
+          // J^T(SEAS5, HNO3): d(d[HNO3]/dt) / d[SEAS5]
           J_adj_block(19, 20) = -0.025*state(20);
-          // J^T(SS5, NO3an1): d(d[NO3an1]/dt) / d[SS5]
+          // J^T(SEAS5, NO3an1): d(d[NO3an1]/dt) / d[SEAS5]
           J_adj_block(19, 23) = 0.025*state(20);
           // J^T(HNO3, HNO3): d(d[HNO3]/dt) / d[HNO3]
           J_adj_block(20, 20) = -0.025*state(10) - 0.025*state(11) - 0.025*state(12) - 0.025*state(13) - 0.025*state(14) - 0.025*state(15) - 0.025*state(16) - 0.025*state(17) - 0.025*state(18) - 0.025*state(19) - (500000.0*((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 40.0)/sqrt(pow((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/2.0)*((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 20.0)/sqrt(pow((20.0*state(21) + 20.0*state(22))/(state(4) + state(5) + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(1 - (state(20) - state(21) - state(22) + state(23) + state(24) + state(25) + 2*state(4) + 2*state(5))/sqrt(pow(-state(20) + state(21) + state(22) - state(23) - state(24) - state(25) - 2*state(4) - 2*state(5), 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*state(20) + (1.0/2.0)*state(21) + (1.0/2.0)*state(22) + (1.0/2.0)*state(23) + (1.0/2.0)*state(24) + (1.0/2.0)*state(25) - state(4) - state(5) - 1.0/2.0*sqrt(pow(-state(20) + state(21) + state(22) - state(23) - state(24) - state(25) - 2*state(4) - 2*state(5), 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*state(20) + (1.0/2.0)*state(21) + (1.0/2.0)*state(22) + (1.0/2.0)*state(23) + (1.0/2.0)*state(24) + (1.0/2.0)*state(25) - state(4) - state(5) - 1.0/2.0*sqrt(pow(-state(20) + state(21) + state(22) - state(23) - state(24) - state(25) - 2*state(4) - 2*state(5), 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 1.0/4.0 - 1.0/4.0*(state(20) - state(21) - state(22) + state(23) + state(24) + state(25) + 2*state(4) + 2*state(5))/sqrt(pow(-state(20) + state(21) + state(22) - state(23) - state(24) - state(25) - 2*state(4) - 2*state(5), 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)));
@@ -335,10 +337,11 @@ namespace mkpp::generated::gocart {
 
 #ifdef MKPP_ENABLE_ADJOINT
       template <class StateView, class DeltaView, class RateView>
-      KOKKOS_INLINE_FUNCTION void compute_tlm(const StateView& state, const DeltaView& delta_C, RateView& dF_block, const double* jvals, const double temp, const double rh) const {
+      KOKKOS_INLINE_FUNCTION void compute_tlm(const StateView& state, const DeltaView& delta_C, RateView& dF_block, const double* jvals, const double temp, const double rh, const double clw) const {
           const double Temp = temp;
           const double RH = rh;
           (void)RH;  // Reserved for future deliquescence modeling
+          const double CLW = clw;
           dF_block(0) = 0.0;
           dF_block(0) += (-1.2e-11*state(3)*exp(-260.0/Temp) - 3.3e-12*state(4)) * delta_C(0);
           dF_block(0) += (2.0*jvals[0]) * delta_C(2);
@@ -348,8 +351,8 @@ namespace mkpp::generated::gocart {
           dF_block(1) += (-1.9e-13*state(3)*exp(-520.0/Temp)) * delta_C(1);
           dF_block(1) += (-1.9e-13*state(1)*exp(-520.0/Temp)) * delta_C(3);
           dF_block(2) = 0.0;
-          dF_block(2) += (-0.0025*state(4) - 1.0*jvals[0]) * delta_C(2);
-          dF_block(2) += (-0.0025*state(2)) * delta_C(4);
+          dF_block(2) += (-0.0025*state(4)*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 1.0*jvals[0]) * delta_C(2);
+          dF_block(2) += (-0.0025*state(2)*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0)) * delta_C(4);
           dF_block(3) = 0.0;
           dF_block(3) += (-1.2e-11*state(3)*exp(-260.0/Temp)) * delta_C(0);
           dF_block(3) += (-1.9e-13*state(3)*exp(-520.0/Temp)) * delta_C(1);
@@ -357,9 +360,9 @@ namespace mkpp::generated::gocart {
           dF_block(4) = 0.0;
           dF_block(4) += (1.2e-11*state(3)*exp(-260.0/Temp) - 3.3e-12*state(4)) * delta_C(0);
           dF_block(4) += (1.9e-13*state(3)*exp(-520.0/Temp)) * delta_C(1);
-          dF_block(4) += (-0.0025*state(4)) * delta_C(2);
+          dF_block(4) += (-0.0025*state(4)*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0)) * delta_C(2);
           dF_block(4) += (1.9e-13*state(1)*exp(-520.0/Temp) + 1.2e-11*state(0)*exp(-260.0/Temp)) * delta_C(3);
-          dF_block(4) += (-2.5e-05*state(10) - 2.5e-05*state(11) - 2.5e-05*state(12) - 2.5e-05*state(13) - 2.5e-05*state(14) - 0.0025*state(2) - 3.3e-12*state(0) - 0.00025*state(15) - 0.00025*state(16) - 0.00025*state(17) - 0.00025*state(18) - 0.00025*state(19)) * delta_C(4);
+          dF_block(4) += (-2.5e-05*state(10) - 2.5e-05*state(11) - 2.5e-05*state(12) - 2.5e-05*state(13) - 2.5e-05*state(14) - 0.0025*state(2)*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 3.3e-12*state(0) - 0.00025*state(15) - 0.00025*state(16) - 0.00025*state(17) - 0.00025*state(18) - 0.00025*state(19)) * delta_C(4);
           dF_block(4) += (-2.5e-05*state(4)) * delta_C(10);
           dF_block(4) += (-2.5e-05*state(4)) * delta_C(11);
           dF_block(4) += (-2.5e-05*state(4)) * delta_C(12);
@@ -372,8 +375,8 @@ namespace mkpp::generated::gocart {
           dF_block(4) += (-0.00025*state(4)) * delta_C(19);
           dF_block(5) = 0.0;
           dF_block(5) += (3.3e-12*state(4)) * delta_C(0);
-          dF_block(5) += (0.0025*state(4)) * delta_C(2);
-          dF_block(5) += (2.5e-05*state(10) + 2.5e-05*state(11) + 2.5e-05*state(12) + 2.5e-05*state(13) + 2.5e-05*state(14) + 0.0025*state(2) + 3.3e-12*state(0) + 0.00025*state(15) + 0.00025*state(16) + 0.00025*state(17) + 0.00025*state(18) + 0.00025*state(19)) * delta_C(4);
+          dF_block(5) += (0.0025*state(4)*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0)) * delta_C(2);
+          dF_block(5) += (2.5e-05*state(10) + 2.5e-05*state(11) + 2.5e-05*state(12) + 2.5e-05*state(13) + 2.5e-05*state(14) + 0.0025*state(2)*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) + 3.3e-12*state(0) + 0.00025*state(15) + 0.00025*state(16) + 0.00025*state(17) + 0.00025*state(18) + 0.00025*state(19)) * delta_C(4);
           dF_block(5) += (2.5e-05*state(4)) * delta_C(10);
           dF_block(5) += (2.5e-05*state(4)) * delta_C(11);
           dF_block(5) += (2.5e-05*state(4)) * delta_C(12);
@@ -544,6 +547,16 @@ namespace mkpp::generated::gocart {
       static constexpr int NUM_PHOTOLYSIS = 1;
 
       /**
+       * @brief Initial-step seed for the adaptive Rosenbrock ramp.
+       *
+       * The first internal substep of every integrate() call starts at
+       * dt_total * initial_step_seed.  The compile-time value is baked as the
+       * initializer; a host may override the member before a solve (per
+       * SolverKernels instance) without regenerating this header.
+       */
+      double initial_step_seed = 1.0e-6;
+
+      /**
        * @brief Performs adaptive time-stepping Rosenbrock integration over dt_total.
        *
        * @tparam StateView Kokkos View type for species concentrations [NUM_SPECIES].
@@ -552,10 +565,12 @@ namespace mkpp::generated::gocart {
        * @param jvals Array of photolysis rate constants [NUM_PHOTOLYSIS].
        */
       template <class StateView>
-      KOKKOS_INLINE_FUNCTION void integrate(double dt_total, StateView& state, const double* jvals, const double temp, const double rh) const {
+      KOKKOS_INLINE_FUNCTION void integrate(double dt_total, StateView& state, const double* jvals, const double temp, const double rh, const double clw) const {
           const double Temp = temp;
           const double RH = rh;
           (void)RH;  // Reserved for future deliquescence modeling
+          const double CLW = clw;
+          (void)CLW;  // Referenced by the gated reaction's compiled chunks.
           const int NUM_SPECIES = 26;
           // ROS-3 coefficients (3-stage, order 3)
           const double g = 0.435866521508459;
@@ -565,9 +580,9 @@ namespace mkpp::generated::gocart {
           const double rejection_factor_decrease = 0.1;
           const double h_min = dt_total * 1.0e-15;
           double t = 0.0;
-          // Match MICM's default initial Rosenbrock step: 1e-6 of the
-          // chemistry interval, with the interval itself as h_max.
-          double dt = dt_total * 1.0e-6;
+          // First substep of the adaptive ramp; the seed member carries the
+          // compile-time default and any host-set runtime override.
+          double dt = dt_total * initial_step_seed;
           bool reject_last_dt = false;
           bool reject_more_dt = false;
 
@@ -588,11 +603,11 @@ namespace mkpp::generated::gocart {
           const double S_8 = state(Species::NO3an2);  // [NO3an2]
           const double S_9 = state(Species::NH4a);  // [NH4a]
           const double S_10 = state(Species::NH3);  // [NH3]
-          const double S_11 = state(Species::SS5);  // [SS5]
-          const double S_12 = state(Species::SS4);  // [SS4]
-          const double S_13 = state(Species::SS3);  // [SS3]
-          const double S_14 = state(Species::SS2);  // [SS2]
-          const double S_15 = state(Species::SS1);  // [SS1]
+          const double S_11 = state(Species::SEAS5);  // [SEAS5]
+          const double S_12 = state(Species::SEAS4);  // [SEAS4]
+          const double S_13 = state(Species::SEAS3);  // [SEAS3]
+          const double S_14 = state(Species::SEAS2);  // [SEAS2]
+          const double S_15 = state(Species::SEAS1);  // [SEAS1]
           const double S_16 = state(Species::DUST5);  // [DUST5]
           const double S_17 = state(Species::DUST4);  // [DUST4]
           const double S_18 = state(Species::DUST3);  // [DUST3]
@@ -606,7 +621,7 @@ namespace mkpp::generated::gocart {
           // The expression-dense Jacobian is evaluated by bounded compiled
           // units.  The solver still uses the same symbolic sparse LU plan.
           double J_values[NUM_SPECIES * NUM_SPECIES] = {};
-          detail::compute_jacobian_chunk_0(state.data(), J_values, jvals, temp, rh);
+          detail::compute_jacobian_chunk_0(state.data(), J_values, jvals, temp, rh, clw);
           // Analytical Jacobian & Iteration Matrix W = inv_g_dt*I - J (sparse)
           double J_0_0 = J_values[8 * NUM_SPECIES + 8];
           double J_1_0 = J_values[9 * NUM_SPECIES + 8];
@@ -854,7 +869,7 @@ namespace mkpp::generated::gocart {
           // --- Stage 1 ---
           // Rate evaluation F1 at S
           double F_values_1[NUM_SPECIES];
-          detail::compute_rates_chunk_0(state.data(), F_values_1, jvals, temp, rh);
+          detail::compute_rates_chunk_0(state.data(), F_values_1, jvals, temp, rh, clw);
           double F1_0 = F_values_1[8];
           double F1_1 = F_values_1[9];
           double F1_2 = F_values_1[6];
@@ -998,7 +1013,7 @@ namespace mkpp::generated::gocart {
           stage_state_2[3] = Y2_24;
           stage_state_2[1] = Y2_25;
           double F_values_2[NUM_SPECIES];
-          detail::compute_rates_chunk_0(stage_state_2, F_values_2, jvals, temp, rh);
+          detail::compute_rates_chunk_0(stage_state_2, F_values_2, jvals, temp, rh, clw);
           double F2_0 = F_values_2[8];
           double F2_1 = F_values_2[9];
           double F2_2 = F_values_2[6];
@@ -1521,11 +1536,12 @@ namespace mkpp::generated::gocart {
 #ifdef MKPP_ENABLE_REDUCTION
       template <class StateView>
       KOKKOS_INLINE_FUNCTION void integrate_with_reduction(
-          double dt_total, StateView& state, const double* jvals, double importance_threshold, const double temp, const double rh) const
+          double dt_total, StateView& state, const double* jvals, double importance_threshold, const double temp, const double rh, const double clw) const
       {
           const double Temp = temp;
           const double RH = rh;
           (void)RH;  // Reserved for future deliquescence modeling
+          const double CLW = clw;
           const int NUM_SPECIES = 26;
           // ROS-3 coefficients (3-stage, order 3)
           const double g = 0.435866521508459;
@@ -1603,7 +1619,7 @@ namespace mkpp::generated::gocart {
           double F1_1 = 5e-06*S_0;
           double F1_2 = -5e-06*S_2;
           double F1_3 = 5e-06*S_2;
-          double F1_4 = 2.5e-05*S_20*S_23 + 2.5e-05*S_19*S_23 + 2.5e-05*S_18*S_23 + 2.5e-05*S_17*S_23 + 2.5e-05*S_16*S_23 + 0.0025*S_21*S_23 + 3.3e-12*S_22*S_23 + 0.00025*S_23*S_15 + 0.00025*S_23*S_14 + 0.00025*S_23*S_13 + 0.00025*S_23*S_12 + 0.00025*S_23*S_11;
+          double F1_4 = 2.5e-05*S_20*S_23 + 2.5e-05*S_19*S_23 + 2.5e-05*S_18*S_23 + 2.5e-05*S_17*S_23 + 2.5e-05*S_16*S_23 + 0.0025*S_21*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) + 3.3e-12*S_22*S_23 + 0.00025*S_15*S_23 + 0.00025*S_14*S_23 + 0.00025*S_13*S_23 + 0.00025*S_12*S_23 + 0.00025*S_11*S_23;
           double F1_5 = -0.025*S_20*S_5 - 0.025*S_19*S_5 - 0.025*S_18*S_5 - 0.025*S_17*S_5 - 0.025*S_16*S_5 - 0.025*S_5*S_15 - 0.025*S_5*S_14 - 0.025*S_5*S_13 - 0.025*S_5*S_12 - 0.025*S_5*S_11 + 1000000.0*S_6 + 1000000.0*S_8 + 1000000.0*S_7 - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
           double F1_6 = 0.025*S_20*S_5 + 0.025*S_17*S_5 + 0.025*S_5*S_14 + 0.025*S_5*S_11 - 1000000.0*S_6 + (166666.6666666665*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 166666.6666666665)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
           double F1_7 = 0.025*S_18*S_5 + 0.025*S_5*S_15 + 0.025*S_5*S_12 - 1000000.0*S_7 + (166666.6666666665*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 166666.6666666665)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
@@ -1620,9 +1636,9 @@ namespace mkpp::generated::gocart {
           double F1_18 = 0.0;
           double F1_19 = 0.0;
           double F1_20 = 0.0;
-          double F1_21 = -0.0025*S_21*S_23 - 1.0*S_21*jvals[0];
+          double F1_21 = -0.0025*S_21*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 1.0*S_21*jvals[0];
           double F1_22 = -1.2e-11*S_24*S_22*exp(-260.0/Temp) + 2.0*S_21*jvals[0] - 3.3e-12*S_22*S_23;
-          double F1_23 = 1.9e-13*S_24*S_25*exp(-520.0/Temp) + 1.2e-11*S_24*S_22*exp(-260.0/Temp) - 2.5e-05*S_20*S_23 - 2.5e-05*S_19*S_23 - 2.5e-05*S_18*S_23 - 2.5e-05*S_17*S_23 - 2.5e-05*S_16*S_23 - 0.0025*S_21*S_23 - 3.3e-12*S_22*S_23 - 0.00025*S_23*S_15 - 0.00025*S_23*S_14 - 0.00025*S_23*S_13 - 0.00025*S_23*S_12 - 0.00025*S_23*S_11;
+          double F1_23 = 1.9e-13*S_24*S_25*exp(-520.0/Temp) + 1.2e-11*S_24*S_22*exp(-260.0/Temp) - 2.5e-05*S_20*S_23 - 2.5e-05*S_19*S_23 - 2.5e-05*S_18*S_23 - 2.5e-05*S_17*S_23 - 2.5e-05*S_16*S_23 - 0.0025*S_21*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 3.3e-12*S_22*S_23 - 0.00025*S_15*S_23 - 0.00025*S_14*S_23 - 0.00025*S_13*S_23 - 0.00025*S_12*S_23 - 0.00025*S_11*S_23;
           double F1_24 = -1.9e-13*S_24*S_25*exp(-520.0/Temp) - 1.2e-11*S_24*S_22*exp(-260.0/Temp);
           double F1_25 = -1.9e-13*S_24*S_25*exp(-520.0/Temp);
 
@@ -1669,9 +1685,9 @@ namespace mkpp::generated::gocart {
           double J_4_18 = 2.5e-05*S_23;
           double J_4_19 = 2.5e-05*S_23;
           double J_4_20 = 2.5e-05*S_23;
-          double J_4_21 = 0.0025*S_23;
+          double J_4_21 = 0.0025*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
           double J_4_22 = 3.3e-12*S_23;
-          double J_4_23 = 2.5e-05*S_20 + 2.5e-05*S_19 + 2.5e-05*S_18 + 2.5e-05*S_17 + 2.5e-05*S_16 + 0.0025*S_21 + 3.3e-12*S_22 + 0.00025*S_15 + 0.00025*S_14 + 0.00025*S_13 + 0.00025*S_12 + 0.00025*S_11;
+          double J_4_23 = 2.5e-05*S_20 + 2.5e-05*S_19 + 2.5e-05*S_18 + 2.5e-05*S_17 + 2.5e-05*S_16 + 0.0025*S_21*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) + 3.3e-12*S_22 + 0.00025*S_15 + 0.00025*S_14 + 0.00025*S_13 + 0.00025*S_12 + 0.00025*S_11;
           double J_5_4 = (-500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) - 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(-2 - (2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 1.0/2.0 - 1.0/4.0*(2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((10.0*S_10 + 10.0*S_9)*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1, 3.0/2.0)*pow(S_23 + S_4 + 1e-30, 2)) - (10.0*S_10 + 10.0*S_9)/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1)*pow(S_23 + S_4 + 1e-30, 2)))*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20)) - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 500000.0)*((10.0*S_10 + 10.0*S_9)*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*pow(S_23 + S_4 + 1e-30, 2)) - (10.0*S_10 + 10.0*S_9)/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*pow(S_23 + S_4 + 1e-30, 2)))*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
           double J_5_5 = -0.025*S_20 - 0.025*S_19 - 0.025*S_18 - 0.025*S_17 - 0.025*S_16 - 0.025*S_15 - 0.025*S_14 - 0.025*S_13 - 0.025*S_12 - 0.025*S_11 - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(1 - (S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 1.0/4.0 - 1.0/4.0*(S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)));
           double J_5_6 = (-500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) - 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(1 - (S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 1.0/4.0 - 1.0/4.0*(S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + 1000000.0;
@@ -1740,8 +1756,8 @@ namespace mkpp::generated::gocart {
           double J_10_9 = (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/8.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/8.0 + (1.0/4.0)*((1.0/2.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/2.0 + (1.0/2.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20))/sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20) + (1.0/8.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + (-10000000.0*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*(S_23 + S_4 + 1e-30)) + 10000000.0/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*(S_23 + S_4 + 1e-30)))*(-1.0/8.0*S_5 + (3.0/8.0)*S_10 + (3.0/8.0)*S_9 - 1.0/8.0*S_6 - 1.0/8.0*S_8 - 1.0/8.0*S_7 - 3.0/4.0*S_23 - 3.0/4.0*S_4 + (1.0/8.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/4.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + (1.0/2.0)*sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20));
           double J_10_10 = (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/8.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/8.0 + (1.0/4.0)*((1.0/2.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/2.0 + (1.0/2.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20))/sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20) + (1.0/8.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + (-10000000.0*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*(S_23 + S_4 + 1e-30)) + 10000000.0/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*(S_23 + S_4 + 1e-30)))*(-1.0/8.0*S_5 + (3.0/8.0)*S_10 + (3.0/8.0)*S_9 - 1.0/8.0*S_6 - 1.0/8.0*S_8 - 1.0/8.0*S_7 - 3.0/4.0*S_23 - 3.0/4.0*S_4 + (1.0/8.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/4.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + (1.0/2.0)*sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20)) - 1000000.0;
           double J_10_23 = (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/8.0)*(2 + (2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 3.0/4.0 + (1.0/4.0)*((1.0/2.0)*(2 + (2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 3 + (1.0/2.0)*(2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20))/sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20) + (1.0/8.0)*(2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + (1000000.0*(10.0*S_10 + 10.0*S_9)*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*pow(S_23 + S_4 + 1e-30, 2)) - 1000000.0*(10.0*S_10 + 10.0*S_9)/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*pow(S_23 + S_4 + 1e-30, 2)))*(-1.0/8.0*S_5 + (3.0/8.0)*S_10 + (3.0/8.0)*S_9 - 1.0/8.0*S_6 - 1.0/8.0*S_8 - 1.0/8.0*S_7 - 3.0/4.0*S_23 - 3.0/4.0*S_4 + (1.0/8.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/4.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + (1.0/2.0)*sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20));
-          double J_21_21 = -0.0025*S_23 - 1.0*jvals[0];
-          double J_21_23 = -0.0025*S_21;
+          double J_21_21 = -0.0025*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 1.0*jvals[0];
+          double J_21_23 = -0.0025*S_21*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
           double J_22_21 = 2.0*jvals[0];
           double J_22_22 = -1.2e-11*S_24*exp(-260.0/Temp) - 3.3e-12*S_23;
           double J_22_23 = -3.3e-12*S_22;
@@ -1756,9 +1772,9 @@ namespace mkpp::generated::gocart {
           double J_23_18 = -2.5e-05*S_23;
           double J_23_19 = -2.5e-05*S_23;
           double J_23_20 = -2.5e-05*S_23;
-          double J_23_21 = -0.0025*S_23;
+          double J_23_21 = -0.0025*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
           double J_23_22 = 1.2e-11*S_24*exp(-260.0/Temp) - 3.3e-12*S_23;
-          double J_23_23 = -2.5e-05*S_20 - 2.5e-05*S_19 - 2.5e-05*S_18 - 2.5e-05*S_17 - 2.5e-05*S_16 - 0.0025*S_21 - 3.3e-12*S_22 - 0.00025*S_15 - 0.00025*S_14 - 0.00025*S_13 - 0.00025*S_12 - 0.00025*S_11;
+          double J_23_23 = -2.5e-05*S_20 - 2.5e-05*S_19 - 2.5e-05*S_18 - 2.5e-05*S_17 - 2.5e-05*S_16 - 0.0025*S_21*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 3.3e-12*S_22 - 0.00025*S_15 - 0.00025*S_14 - 0.00025*S_13 - 0.00025*S_12 - 0.00025*S_11;
           double J_23_24 = 1.9e-13*S_25*exp(-520.0/Temp) + 1.2e-11*S_22*exp(-260.0/Temp);
           double J_23_25 = 1.9e-13*S_24*exp(-520.0/Temp);
           double J_24_22 = -1.2e-11*S_24*exp(-260.0/Temp);
@@ -2090,15 +2106,15 @@ namespace mkpp::generated::gocart {
           double y1_9 = active[9] ? (F1_9 - L_9_4 * y1_4 - L_9_5 * y1_5 - L_9_6 * y1_6 - L_9_7 * y1_7 - L_9_8 * y1_8) : 0.0;
           // Block 6: K1 forward sub [NH3]
           double y1_10 = active[10] ? (F1_10 - L_10_4 * y1_4 - L_10_5 * y1_5 - L_10_6 * y1_6 - L_10_7 * y1_7 - L_10_8 * y1_8 - L_10_9 * y1_9) : 0.0;
-          // Block 7: K1 forward sub [SS5]
+          // Block 7: K1 forward sub [SEAS5]
           double y1_11 = active[11] ? (F1_11) : 0.0;
-          // Block 8: K1 forward sub [SS4]
+          // Block 8: K1 forward sub [SEAS4]
           double y1_12 = active[12] ? (F1_12) : 0.0;
-          // Block 9: K1 forward sub [SS3]
+          // Block 9: K1 forward sub [SEAS3]
           double y1_13 = active[13] ? (F1_13) : 0.0;
-          // Block 10: K1 forward sub [SS2]
+          // Block 10: K1 forward sub [SEAS2]
           double y1_14 = active[14] ? (F1_14) : 0.0;
-          // Block 11: K1 forward sub [SS1]
+          // Block 11: K1 forward sub [SEAS1]
           double y1_15 = active[15] ? (F1_15) : 0.0;
           // Block 12: K1 forward sub [DUST5]
           double y1_16 = active[16] ? (F1_16) : 0.0;
@@ -2131,15 +2147,15 @@ namespace mkpp::generated::gocart {
           double K1_17 = active[17] ? (y1_17 / U_17_17) : 0.0;
           // Block 12: K1 backward sub [DUST5]
           double K1_16 = active[16] ? (y1_16 / U_16_16) : 0.0;
-          // Block 11: K1 backward sub [SS1]
+          // Block 11: K1 backward sub [SEAS1]
           double K1_15 = active[15] ? (y1_15 / U_15_15) : 0.0;
-          // Block 10: K1 backward sub [SS2]
+          // Block 10: K1 backward sub [SEAS2]
           double K1_14 = active[14] ? (y1_14 / U_14_14) : 0.0;
-          // Block 9: K1 backward sub [SS3]
+          // Block 9: K1 backward sub [SEAS3]
           double K1_13 = active[13] ? (y1_13 / U_13_13) : 0.0;
-          // Block 8: K1 backward sub [SS4]
+          // Block 8: K1 backward sub [SEAS4]
           double K1_12 = active[12] ? (y1_12 / U_12_12) : 0.0;
-          // Block 7: K1 backward sub [SS5]
+          // Block 7: K1 backward sub [SEAS5]
           double K1_11 = active[11] ? (y1_11 / U_11_11) : 0.0;
           // Block 6: K1 backward sub [NH3]
           double K1_10 = active[10] ? ((y1_10 - U_10_11 * K1_11 - U_10_12 * K1_12 - U_10_13 * K1_13 - U_10_14 * K1_14 - U_10_15 * K1_15 - U_10_16 * K1_16 - U_10_17 * K1_17 - U_10_18 * K1_18 - U_10_19 * K1_19 - U_10_20 * K1_20 - U_10_21 * K1_21 - U_10_22 * K1_22 - U_10_23 * K1_23) / U_10_10) : 0.0;
@@ -2194,7 +2210,7 @@ namespace mkpp::generated::gocart {
           double F2_1 = 5e-06*Y2_0;
           double F2_2 = -5e-06*Y2_2;
           double F2_3 = 5e-06*Y2_2;
-          double F2_4 = 2.5e-05*Y2_20*Y2_23 + 2.5e-05*Y2_19*Y2_23 + 2.5e-05*Y2_18*Y2_23 + 2.5e-05*Y2_17*Y2_23 + 2.5e-05*Y2_16*Y2_23 + 0.0025*Y2_21*Y2_23 + 3.3e-12*Y2_22*Y2_23 + 0.00025*Y2_23*Y2_15 + 0.00025*Y2_23*Y2_14 + 0.00025*Y2_23*Y2_13 + 0.00025*Y2_23*Y2_12 + 0.00025*Y2_23*Y2_11;
+          double F2_4 = 2.5e-05*Y2_20*Y2_23 + 2.5e-05*Y2_19*Y2_23 + 2.5e-05*Y2_18*Y2_23 + 2.5e-05*Y2_17*Y2_23 + 2.5e-05*Y2_16*Y2_23 + 0.0025*Y2_21*Y2_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) + 3.3e-12*Y2_22*Y2_23 + 0.00025*Y2_15*Y2_23 + 0.00025*Y2_14*Y2_23 + 0.00025*Y2_13*Y2_23 + 0.00025*Y2_12*Y2_23 + 0.00025*Y2_11*Y2_23;
           double F2_5 = -0.025*Y2_20*Y2_5 - 0.025*Y2_19*Y2_5 - 0.025*Y2_18*Y2_5 - 0.025*Y2_17*Y2_5 - 0.025*Y2_16*Y2_5 - 0.025*Y2_5*Y2_15 - 0.025*Y2_5*Y2_14 - 0.025*Y2_5*Y2_13 - 0.025*Y2_5*Y2_12 - 0.025*Y2_5*Y2_11 + 1000000.0*Y2_6 + 1000000.0*Y2_8 + 1000000.0*Y2_7 - (500000.0*((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 40.0)/sqrt(pow((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/2.0)*((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 20.0)/sqrt(pow((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*Y2_5 + (1.0/4.0)*Y2_10 + (1.0/4.0)*Y2_9 + (1.0/4.0)*Y2_6 + (1.0/4.0)*Y2_8 + (1.0/4.0)*Y2_7 - 1.0/2.0*Y2_23 - 1.0/2.0*Y2_4 - 1.0/4.0*sqrt(pow(-Y2_5 + Y2_10 + Y2_9 - Y2_6 - Y2_8 - Y2_7 - 2*Y2_23 - 2*Y2_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*Y2_5 + (1.0/2.0)*Y2_10 + (1.0/2.0)*Y2_9 + (1.0/2.0)*Y2_6 + (1.0/2.0)*Y2_8 + (1.0/2.0)*Y2_7 - Y2_23 - Y2_4 - 1.0/2.0*sqrt(pow(-Y2_5 + Y2_10 + Y2_9 - Y2_6 - Y2_8 - Y2_7 - 2*Y2_23 - 2*Y2_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
           double F2_6 = 0.025*Y2_20*Y2_5 + 0.025*Y2_17*Y2_5 + 0.025*Y2_5*Y2_14 + 0.025*Y2_5*Y2_11 - 1000000.0*Y2_6 + (166666.6666666665*((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 40.0)/sqrt(pow((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 40.0, 2) + 1) + 166666.6666666665)*((1.0/2.0)*((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 20.0)/sqrt(pow((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*Y2_5 + (1.0/4.0)*Y2_10 + (1.0/4.0)*Y2_9 + (1.0/4.0)*Y2_6 + (1.0/4.0)*Y2_8 + (1.0/4.0)*Y2_7 - 1.0/2.0*Y2_23 - 1.0/2.0*Y2_4 - 1.0/4.0*sqrt(pow(-Y2_5 + Y2_10 + Y2_9 - Y2_6 - Y2_8 - Y2_7 - 2*Y2_23 - 2*Y2_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*Y2_5 + (1.0/2.0)*Y2_10 + (1.0/2.0)*Y2_9 + (1.0/2.0)*Y2_6 + (1.0/2.0)*Y2_8 + (1.0/2.0)*Y2_7 - Y2_23 - Y2_4 - 1.0/2.0*sqrt(pow(-Y2_5 + Y2_10 + Y2_9 - Y2_6 - Y2_8 - Y2_7 - 2*Y2_23 - 2*Y2_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
           double F2_7 = 0.025*Y2_18*Y2_5 + 0.025*Y2_5*Y2_15 + 0.025*Y2_5*Y2_12 - 1000000.0*Y2_7 + (166666.6666666665*((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 40.0)/sqrt(pow((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 40.0, 2) + 1) + 166666.6666666665)*((1.0/2.0)*((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 20.0)/sqrt(pow((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*Y2_5 + (1.0/4.0)*Y2_10 + (1.0/4.0)*Y2_9 + (1.0/4.0)*Y2_6 + (1.0/4.0)*Y2_8 + (1.0/4.0)*Y2_7 - 1.0/2.0*Y2_23 - 1.0/2.0*Y2_4 - 1.0/4.0*sqrt(pow(-Y2_5 + Y2_10 + Y2_9 - Y2_6 - Y2_8 - Y2_7 - 2*Y2_23 - 2*Y2_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*Y2_5 + (1.0/2.0)*Y2_10 + (1.0/2.0)*Y2_9 + (1.0/2.0)*Y2_6 + (1.0/2.0)*Y2_8 + (1.0/2.0)*Y2_7 - Y2_23 - Y2_4 - 1.0/2.0*sqrt(pow(-Y2_5 + Y2_10 + Y2_9 - Y2_6 - Y2_8 - Y2_7 - 2*Y2_23 - 2*Y2_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
@@ -2211,9 +2227,9 @@ namespace mkpp::generated::gocart {
           double F2_18 = 0.0;
           double F2_19 = 0.0;
           double F2_20 = 0.0;
-          double F2_21 = -0.0025*Y2_21*Y2_23 - 1.0*Y2_21*jvals[0];
+          double F2_21 = -0.0025*Y2_21*Y2_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 1.0*Y2_21*jvals[0];
           double F2_22 = -1.2e-11*Y2_24*Y2_22*exp(-260.0/Temp) + 2.0*Y2_21*jvals[0] - 3.3e-12*Y2_22*Y2_23;
-          double F2_23 = 1.9e-13*Y2_24*Y2_25*exp(-520.0/Temp) + 1.2e-11*Y2_24*Y2_22*exp(-260.0/Temp) - 2.5e-05*Y2_20*Y2_23 - 2.5e-05*Y2_19*Y2_23 - 2.5e-05*Y2_18*Y2_23 - 2.5e-05*Y2_17*Y2_23 - 2.5e-05*Y2_16*Y2_23 - 0.0025*Y2_21*Y2_23 - 3.3e-12*Y2_22*Y2_23 - 0.00025*Y2_23*Y2_15 - 0.00025*Y2_23*Y2_14 - 0.00025*Y2_23*Y2_13 - 0.00025*Y2_23*Y2_12 - 0.00025*Y2_23*Y2_11;
+          double F2_23 = 1.9e-13*Y2_24*Y2_25*exp(-520.0/Temp) + 1.2e-11*Y2_24*Y2_22*exp(-260.0/Temp) - 2.5e-05*Y2_20*Y2_23 - 2.5e-05*Y2_19*Y2_23 - 2.5e-05*Y2_18*Y2_23 - 2.5e-05*Y2_17*Y2_23 - 2.5e-05*Y2_16*Y2_23 - 0.0025*Y2_21*Y2_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 3.3e-12*Y2_22*Y2_23 - 0.00025*Y2_15*Y2_23 - 0.00025*Y2_14*Y2_23 - 0.00025*Y2_13*Y2_23 - 0.00025*Y2_12*Y2_23 - 0.00025*Y2_11*Y2_23;
           double F2_24 = -1.9e-13*Y2_24*Y2_25*exp(-520.0/Temp) - 1.2e-11*Y2_24*Y2_22*exp(-260.0/Temp);
           double F2_25 = -1.9e-13*Y2_24*Y2_25*exp(-520.0/Temp);
           // RHS for stage 2
@@ -2261,15 +2277,15 @@ namespace mkpp::generated::gocart {
           double y2_9 = active[9] ? (rhs2_9 - L_9_4 * y2_4 - L_9_5 * y2_5 - L_9_6 * y2_6 - L_9_7 * y2_7 - L_9_8 * y2_8) : 0.0;
           // Block 6: K2 forward sub [NH3]
           double y2_10 = active[10] ? (rhs2_10 - L_10_4 * y2_4 - L_10_5 * y2_5 - L_10_6 * y2_6 - L_10_7 * y2_7 - L_10_8 * y2_8 - L_10_9 * y2_9) : 0.0;
-          // Block 7: K2 forward sub [SS5]
+          // Block 7: K2 forward sub [SEAS5]
           double y2_11 = active[11] ? (rhs2_11) : 0.0;
-          // Block 8: K2 forward sub [SS4]
+          // Block 8: K2 forward sub [SEAS4]
           double y2_12 = active[12] ? (rhs2_12) : 0.0;
-          // Block 9: K2 forward sub [SS3]
+          // Block 9: K2 forward sub [SEAS3]
           double y2_13 = active[13] ? (rhs2_13) : 0.0;
-          // Block 10: K2 forward sub [SS2]
+          // Block 10: K2 forward sub [SEAS2]
           double y2_14 = active[14] ? (rhs2_14) : 0.0;
-          // Block 11: K2 forward sub [SS1]
+          // Block 11: K2 forward sub [SEAS1]
           double y2_15 = active[15] ? (rhs2_15) : 0.0;
           // Block 12: K2 forward sub [DUST5]
           double y2_16 = active[16] ? (rhs2_16) : 0.0;
@@ -2302,15 +2318,15 @@ namespace mkpp::generated::gocart {
           double K2_17 = active[17] ? (y2_17 / U_17_17) : 0.0;
           // Block 12: K2 backward sub [DUST5]
           double K2_16 = active[16] ? (y2_16 / U_16_16) : 0.0;
-          // Block 11: K2 backward sub [SS1]
+          // Block 11: K2 backward sub [SEAS1]
           double K2_15 = active[15] ? (y2_15 / U_15_15) : 0.0;
-          // Block 10: K2 backward sub [SS2]
+          // Block 10: K2 backward sub [SEAS2]
           double K2_14 = active[14] ? (y2_14 / U_14_14) : 0.0;
-          // Block 9: K2 backward sub [SS3]
+          // Block 9: K2 backward sub [SEAS3]
           double K2_13 = active[13] ? (y2_13 / U_13_13) : 0.0;
-          // Block 8: K2 backward sub [SS4]
+          // Block 8: K2 backward sub [SEAS4]
           double K2_12 = active[12] ? (y2_12 / U_12_12) : 0.0;
-          // Block 7: K2 backward sub [SS5]
+          // Block 7: K2 backward sub [SEAS5]
           double K2_11 = active[11] ? (y2_11 / U_11_11) : 0.0;
           // Block 6: K2 backward sub [NH3]
           double K2_10 = active[10] ? ((y2_10 - U_10_11 * K2_11 - U_10_12 * K2_12 - U_10_13 * K2_13 - U_10_14 * K2_14 - U_10_15 * K2_15 - U_10_16 * K2_16 - U_10_17 * K2_17 - U_10_18 * K2_18 - U_10_19 * K2_19 - U_10_20 * K2_20 - U_10_21 * K2_21 - U_10_22 * K2_22 - U_10_23 * K2_23) / U_10_10) : 0.0;
@@ -2406,15 +2422,15 @@ namespace mkpp::generated::gocart {
           double y3_9 = active[9] ? (rhs3_9 - L_9_4 * y3_4 - L_9_5 * y3_5 - L_9_6 * y3_6 - L_9_7 * y3_7 - L_9_8 * y3_8) : 0.0;
           // Block 6: K3 forward sub [NH3]
           double y3_10 = active[10] ? (rhs3_10 - L_10_4 * y3_4 - L_10_5 * y3_5 - L_10_6 * y3_6 - L_10_7 * y3_7 - L_10_8 * y3_8 - L_10_9 * y3_9) : 0.0;
-          // Block 7: K3 forward sub [SS5]
+          // Block 7: K3 forward sub [SEAS5]
           double y3_11 = active[11] ? (rhs3_11) : 0.0;
-          // Block 8: K3 forward sub [SS4]
+          // Block 8: K3 forward sub [SEAS4]
           double y3_12 = active[12] ? (rhs3_12) : 0.0;
-          // Block 9: K3 forward sub [SS3]
+          // Block 9: K3 forward sub [SEAS3]
           double y3_13 = active[13] ? (rhs3_13) : 0.0;
-          // Block 10: K3 forward sub [SS2]
+          // Block 10: K3 forward sub [SEAS2]
           double y3_14 = active[14] ? (rhs3_14) : 0.0;
-          // Block 11: K3 forward sub [SS1]
+          // Block 11: K3 forward sub [SEAS1]
           double y3_15 = active[15] ? (rhs3_15) : 0.0;
           // Block 12: K3 forward sub [DUST5]
           double y3_16 = active[16] ? (rhs3_16) : 0.0;
@@ -2447,15 +2463,15 @@ namespace mkpp::generated::gocart {
           double K3_17 = active[17] ? (y3_17 / U_17_17) : 0.0;
           // Block 12: K3 backward sub [DUST5]
           double K3_16 = active[16] ? (y3_16 / U_16_16) : 0.0;
-          // Block 11: K3 backward sub [SS1]
+          // Block 11: K3 backward sub [SEAS1]
           double K3_15 = active[15] ? (y3_15 / U_15_15) : 0.0;
-          // Block 10: K3 backward sub [SS2]
+          // Block 10: K3 backward sub [SEAS2]
           double K3_14 = active[14] ? (y3_14 / U_14_14) : 0.0;
-          // Block 9: K3 backward sub [SS3]
+          // Block 9: K3 backward sub [SEAS3]
           double K3_13 = active[13] ? (y3_13 / U_13_13) : 0.0;
-          // Block 8: K3 backward sub [SS4]
+          // Block 8: K3 backward sub [SEAS4]
           double K3_12 = active[12] ? (y3_12 / U_12_12) : 0.0;
-          // Block 7: K3 backward sub [SS5]
+          // Block 7: K3 backward sub [SEAS5]
           double K3_11 = active[11] ? (y3_11 / U_11_11) : 0.0;
           // Block 6: K3 backward sub [NH3]
           double K3_10 = active[10] ? ((y3_10 - U_10_11 * K3_11 - U_10_12 * K3_12 - U_10_13 * K3_13 - U_10_14 * K3_14 - U_10_15 * K3_15 - U_10_16 * K3_16 - U_10_17 * K3_17 - U_10_18 * K3_18 - U_10_19 * K3_19 - U_10_20 * K3_20 - U_10_21 * K3_21 - U_10_22 * K3_22 - U_10_23 * K3_23) / U_10_10) : 0.0;
@@ -2712,12 +2728,13 @@ namespace mkpp::generated::gocart {
       template <class StateView>
       KOKKOS_INLINE_FUNCTION int integrate_fwd_checkpoint(
           double dt_total, StateView& state, const double* jvals,
-          CheckpointBuffer& chk, const double temp, const double rh) const
+          CheckpointBuffer& chk, const double temp, const double rh, const double clw) const
       {
           const int NUM_SPECIES = 26;
           const double Temp = temp;
           const double RH = rh;
           (void)RH;  // Reserved for future deliquescence modeling
+          const double CLW = clw;
           // ROS-3 coefficients (3-stage, order 3)
           const double g = 0.435866521508459;
           const double safety = 0.9;
@@ -2745,11 +2762,11 @@ namespace mkpp::generated::gocart {
           const double S_8 = state(Species::NO3an2);  // [NO3an2]
           const double S_9 = state(Species::NH4a);  // [NH4a]
           const double S_10 = state(Species::NH3);  // [NH3]
-          const double S_11 = state(Species::SS5);  // [SS5]
-          const double S_12 = state(Species::SS4);  // [SS4]
-          const double S_13 = state(Species::SS3);  // [SS3]
-          const double S_14 = state(Species::SS2);  // [SS2]
-          const double S_15 = state(Species::SS1);  // [SS1]
+          const double S_11 = state(Species::SEAS5);  // [SEAS5]
+          const double S_12 = state(Species::SEAS4);  // [SEAS4]
+          const double S_13 = state(Species::SEAS3);  // [SEAS3]
+          const double S_14 = state(Species::SEAS2);  // [SEAS2]
+          const double S_15 = state(Species::SEAS1);  // [SEAS1]
           const double S_16 = state(Species::DUST5);  // [DUST5]
           const double S_17 = state(Species::DUST4);  // [DUST4]
           const double S_18 = state(Species::DUST3);  // [DUST3]
@@ -2763,40 +2780,41 @@ namespace mkpp::generated::gocart {
 
           // --- CSE Temporaries ---
           const double cse_tmp_0 = 1.0/Temp;
-          const double cse_tmp_1 = 1.0;
-          const double cse_tmp_2 = S_4*cse_tmp_1;
-          const double cse_tmp_3 = 2.5e-05*cse_tmp_2;
-          const double cse_tmp_4 = 0.00025*cse_tmp_2;
-          const double cse_tmp_5 = 0.025*S_20*cse_tmp_1;
+          const double cse_tmp_1 = 100000000.0*CLW - 100.0;
+          const double cse_tmp_2 = 1.0;
+          const double cse_tmp_3 = S_4*cse_tmp_2;
+          const double cse_tmp_4 = 2.5e-05*cse_tmp_3;
+          const double cse_tmp_5 = 0.00025*cse_tmp_3;
+          const double cse_tmp_6 = 0.025*S_20*cse_tmp_2;
 
           // --- Reaction Rate Fluxes R_m ---
           const double R_0 = 1.2e-11*S_3*S_0*exp(-260.0*cse_tmp_0);
           const double R_1 = 1.9e-13*S_3*S_1*exp(-520.0*cse_tmp_0);
           const double R_2 = 3.3e-12*S_0*S_4;
-          const double R_3 = 0.0025*S_2*cse_tmp_2;
+          const double R_3 = 0.00125*S_2*cse_tmp_3*(cse_tmp_1/sqrt((cse_tmp_1 * cse_tmp_1) + 1) + 1);
           const double R_4 = 5e-06*S_6;
           const double R_5 = 5e-06*S_8;
           const double R_6 = S_2*jvals[0];
-          const double R_7 = S_10*cse_tmp_3;
-          const double R_8 = S_11*cse_tmp_3;
-          const double R_9 = S_12*cse_tmp_3;
-          const double R_10 = S_13*cse_tmp_3;
-          const double R_11 = S_14*cse_tmp_3;
-          const double R_12 = S_15*cse_tmp_4;
-          const double R_13 = S_16*cse_tmp_4;
-          const double R_14 = S_17*cse_tmp_4;
-          const double R_15 = S_18*cse_tmp_4;
-          const double R_16 = S_19*cse_tmp_4;
-          const double R_17 = S_10*cse_tmp_5;
-          const double R_18 = S_11*cse_tmp_5;
-          const double R_19 = S_12*cse_tmp_5;
-          const double R_20 = S_13*cse_tmp_5;
-          const double R_21 = S_14*cse_tmp_5;
-          const double R_22 = S_15*cse_tmp_5;
-          const double R_23 = S_16*cse_tmp_5;
-          const double R_24 = S_17*cse_tmp_5;
-          const double R_25 = S_18*cse_tmp_5;
-          const double R_26 = S_19*cse_tmp_5;
+          const double R_7 = S_10*cse_tmp_4;
+          const double R_8 = S_11*cse_tmp_4;
+          const double R_9 = S_12*cse_tmp_4;
+          const double R_10 = S_13*cse_tmp_4;
+          const double R_11 = S_14*cse_tmp_4;
+          const double R_12 = S_15*cse_tmp_5;
+          const double R_13 = S_16*cse_tmp_5;
+          const double R_14 = S_17*cse_tmp_5;
+          const double R_15 = S_18*cse_tmp_5;
+          const double R_16 = S_19*cse_tmp_5;
+          const double R_17 = S_10*cse_tmp_6;
+          const double R_18 = S_11*cse_tmp_6;
+          const double R_19 = S_12*cse_tmp_6;
+          const double R_20 = S_13*cse_tmp_6;
+          const double R_21 = S_14*cse_tmp_6;
+          const double R_22 = S_15*cse_tmp_6;
+          const double R_23 = S_16*cse_tmp_6;
+          const double R_24 = S_17*cse_tmp_6;
+          const double R_25 = S_18*cse_tmp_6;
+          const double R_26 = S_19*cse_tmp_6;
 
           // Analytical Jacobian & Iteration Matrix W = inv_g_dt*I - J (sparse)
           double J_0_0 = -5e-06;
@@ -2813,9 +2831,9 @@ namespace mkpp::generated::gocart {
           double J_4_18 = 2.5e-05*S_23;
           double J_4_19 = 2.5e-05*S_23;
           double J_4_20 = 2.5e-05*S_23;
-          double J_4_21 = 0.0025*S_23;
+          double J_4_21 = 0.0025*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
           double J_4_22 = 3.3e-12*S_23;
-          double J_4_23 = 2.5e-05*S_20 + 2.5e-05*S_19 + 2.5e-05*S_18 + 2.5e-05*S_17 + 2.5e-05*S_16 + 0.0025*S_21 + 3.3e-12*S_22 + 0.00025*S_15 + 0.00025*S_14 + 0.00025*S_13 + 0.00025*S_12 + 0.00025*S_11;
+          double J_4_23 = 2.5e-05*S_20 + 2.5e-05*S_19 + 2.5e-05*S_18 + 2.5e-05*S_17 + 2.5e-05*S_16 + 0.0025*S_21*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) + 3.3e-12*S_22 + 0.00025*S_15 + 0.00025*S_14 + 0.00025*S_13 + 0.00025*S_12 + 0.00025*S_11;
           double J_5_4 = (-500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) - 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(-2 - (2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 1.0/2.0 - 1.0/4.0*(2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((10.0*S_10 + 10.0*S_9)*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1, 3.0/2.0)*pow(S_23 + S_4 + 1e-30, 2)) - (10.0*S_10 + 10.0*S_9)/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1)*pow(S_23 + S_4 + 1e-30, 2)))*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20)) - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 500000.0)*((10.0*S_10 + 10.0*S_9)*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*pow(S_23 + S_4 + 1e-30, 2)) - (10.0*S_10 + 10.0*S_9)/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*pow(S_23 + S_4 + 1e-30, 2)))*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
           double J_5_5 = -0.025*S_20 - 0.025*S_19 - 0.025*S_18 - 0.025*S_17 - 0.025*S_16 - 0.025*S_15 - 0.025*S_14 - 0.025*S_13 - 0.025*S_12 - 0.025*S_11 - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(1 - (S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 1.0/4.0 - 1.0/4.0*(S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)));
           double J_5_6 = (-500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) - 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(1 - (S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 1.0/4.0 - 1.0/4.0*(S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + 1000000.0;
@@ -2884,8 +2902,8 @@ namespace mkpp::generated::gocart {
           double J_10_9 = (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/8.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/8.0 + (1.0/4.0)*((1.0/2.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/2.0 + (1.0/2.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20))/sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20) + (1.0/8.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + (-10000000.0*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*(S_23 + S_4 + 1e-30)) + 10000000.0/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*(S_23 + S_4 + 1e-30)))*(-1.0/8.0*S_5 + (3.0/8.0)*S_10 + (3.0/8.0)*S_9 - 1.0/8.0*S_6 - 1.0/8.0*S_8 - 1.0/8.0*S_7 - 3.0/4.0*S_23 - 3.0/4.0*S_4 + (1.0/8.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/4.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + (1.0/2.0)*sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20));
           double J_10_10 = (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/8.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/8.0 + (1.0/4.0)*((1.0/2.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/2.0 + (1.0/2.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20))/sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20) + (1.0/8.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + (-10000000.0*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*(S_23 + S_4 + 1e-30)) + 10000000.0/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*(S_23 + S_4 + 1e-30)))*(-1.0/8.0*S_5 + (3.0/8.0)*S_10 + (3.0/8.0)*S_9 - 1.0/8.0*S_6 - 1.0/8.0*S_8 - 1.0/8.0*S_7 - 3.0/4.0*S_23 - 3.0/4.0*S_4 + (1.0/8.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/4.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + (1.0/2.0)*sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20)) - 1000000.0;
           double J_10_23 = (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/8.0)*(2 + (2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 3.0/4.0 + (1.0/4.0)*((1.0/2.0)*(2 + (2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 3 + (1.0/2.0)*(2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20))/sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20) + (1.0/8.0)*(2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + (1000000.0*(10.0*S_10 + 10.0*S_9)*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*pow(S_23 + S_4 + 1e-30, 2)) - 1000000.0*(10.0*S_10 + 10.0*S_9)/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*pow(S_23 + S_4 + 1e-30, 2)))*(-1.0/8.0*S_5 + (3.0/8.0)*S_10 + (3.0/8.0)*S_9 - 1.0/8.0*S_6 - 1.0/8.0*S_8 - 1.0/8.0*S_7 - 3.0/4.0*S_23 - 3.0/4.0*S_4 + (1.0/8.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/4.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + (1.0/2.0)*sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20));
-          double J_21_21 = -0.0025*S_23 - 1.0*jvals[0];
-          double J_21_23 = -0.0025*S_21;
+          double J_21_21 = -0.0025*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 1.0*jvals[0];
+          double J_21_23 = -0.0025*S_21*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
           double J_22_21 = 2.0*jvals[0];
           double J_22_22 = -1.2e-11*S_24*exp(-260.0/Temp) - 3.3e-12*S_23;
           double J_22_23 = -3.3e-12*S_22;
@@ -2900,9 +2918,9 @@ namespace mkpp::generated::gocart {
           double J_23_18 = -2.5e-05*S_23;
           double J_23_19 = -2.5e-05*S_23;
           double J_23_20 = -2.5e-05*S_23;
-          double J_23_21 = -0.0025*S_23;
+          double J_23_21 = -0.0025*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
           double J_23_22 = 1.2e-11*S_24*exp(-260.0/Temp) - 3.3e-12*S_23;
-          double J_23_23 = -2.5e-05*S_20 - 2.5e-05*S_19 - 2.5e-05*S_18 - 2.5e-05*S_17 - 2.5e-05*S_16 - 0.0025*S_21 - 3.3e-12*S_22 - 0.00025*S_15 - 0.00025*S_14 - 0.00025*S_13 - 0.00025*S_12 - 0.00025*S_11;
+          double J_23_23 = -2.5e-05*S_20 - 2.5e-05*S_19 - 2.5e-05*S_18 - 2.5e-05*S_17 - 2.5e-05*S_16 - 0.0025*S_21*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 3.3e-12*S_22 - 0.00025*S_15 - 0.00025*S_14 - 0.00025*S_13 - 0.00025*S_12 - 0.00025*S_11;
           double J_23_24 = 1.9e-13*S_25*exp(-520.0/Temp) + 1.2e-11*S_22*exp(-260.0/Temp);
           double J_23_25 = 1.9e-13*S_24*exp(-520.0/Temp);
           double J_24_22 = -1.2e-11*S_24*exp(-260.0/Temp);
@@ -3005,15 +3023,15 @@ namespace mkpp::generated::gocart {
           double W_10_9 = -J_10_9;
           double W_10_10 = inv_g_dt - J_10_10;
           double W_10_23 = -J_10_23;
-          // Block 7: species [SS5]
+          // Block 7: species [SEAS5]
           double W_11_11 = inv_g_dt;
-          // Block 8: species [SS4]
+          // Block 8: species [SEAS4]
           double W_12_12 = inv_g_dt;
-          // Block 9: species [SS3]
+          // Block 9: species [SEAS3]
           double W_13_13 = inv_g_dt;
-          // Block 10: species [SS2]
+          // Block 10: species [SEAS2]
           double W_14_14 = inv_g_dt;
-          // Block 11: species [SS1]
+          // Block 11: species [SEAS1]
           double W_15_15 = inv_g_dt;
           // Block 12: species [DUST5]
           double W_16_16 = inv_g_dt;
@@ -3200,20 +3218,20 @@ namespace mkpp::generated::gocart {
           double U_10_21 = 0.0 - L_10_4 * U_4_21 - L_10_5 * U_5_21 - L_10_6 * U_6_21 - L_10_7 * U_7_21 - L_10_8 * U_8_21 - L_10_9 * U_9_21;
           double U_10_22 = 0.0 - L_10_4 * U_4_22 - L_10_5 * U_5_22 - L_10_6 * U_6_22 - L_10_7 * U_7_22 - L_10_8 * U_8_22 - L_10_9 * U_9_22;
           double U_10_23 = W_10_23 - L_10_4 * U_4_23 - L_10_5 * U_5_23 - L_10_6 * U_6_23 - L_10_7 * U_7_23 - L_10_8 * U_8_23 - L_10_9 * U_9_23;
-          // Block 7: species [SS5]
+          // Block 7: species [SEAS5]
           double U_11_11 = W_11_11;
           // Block 16: species [DUST1, H2O2, OH, SO2, DMS, NO3]
           double L_23_11 = (W_23_11) / U_11_11;
-          // Block 8: species [SS4]
+          // Block 8: species [SEAS4]
           double U_12_12 = W_12_12;
           double L_23_12 = (W_23_12) / U_12_12;
-          // Block 9: species [SS3]
+          // Block 9: species [SEAS3]
           double U_13_13 = W_13_13;
           double L_23_13 = (W_23_13) / U_13_13;
-          // Block 10: species [SS2]
+          // Block 10: species [SEAS2]
           double U_14_14 = W_14_14;
           double L_23_14 = (W_23_14) / U_14_14;
-          // Block 11: species [SS1]
+          // Block 11: species [SEAS1]
           double U_15_15 = W_15_15;
           double L_23_15 = (W_23_15) / U_15_15;
           // Block 12: species [DUST5]
@@ -3254,7 +3272,7 @@ namespace mkpp::generated::gocart {
           double F1_1 = 5e-06*S_0;
           double F1_2 = -5e-06*S_2;
           double F1_3 = 5e-06*S_2;
-          double F1_4 = 2.5e-05*S_20*S_23 + 2.5e-05*S_19*S_23 + 2.5e-05*S_18*S_23 + 2.5e-05*S_17*S_23 + 2.5e-05*S_16*S_23 + 0.0025*S_21*S_23 + 3.3e-12*S_22*S_23 + 0.00025*S_23*S_15 + 0.00025*S_23*S_14 + 0.00025*S_23*S_13 + 0.00025*S_23*S_12 + 0.00025*S_23*S_11;
+          double F1_4 = 2.5e-05*S_20*S_23 + 2.5e-05*S_19*S_23 + 2.5e-05*S_18*S_23 + 2.5e-05*S_17*S_23 + 2.5e-05*S_16*S_23 + 0.0025*S_21*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) + 3.3e-12*S_22*S_23 + 0.00025*S_15*S_23 + 0.00025*S_14*S_23 + 0.00025*S_13*S_23 + 0.00025*S_12*S_23 + 0.00025*S_11*S_23;
           double F1_5 = -0.025*S_20*S_5 - 0.025*S_19*S_5 - 0.025*S_18*S_5 - 0.025*S_17*S_5 - 0.025*S_16*S_5 - 0.025*S_5*S_15 - 0.025*S_5*S_14 - 0.025*S_5*S_13 - 0.025*S_5*S_12 - 0.025*S_5*S_11 + 1000000.0*S_6 + 1000000.0*S_8 + 1000000.0*S_7 - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
           double F1_6 = 0.025*S_20*S_5 + 0.025*S_17*S_5 + 0.025*S_5*S_14 + 0.025*S_5*S_11 - 1000000.0*S_6 + (166666.6666666665*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 166666.6666666665)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
           double F1_7 = 0.025*S_18*S_5 + 0.025*S_5*S_15 + 0.025*S_5*S_12 - 1000000.0*S_7 + (166666.6666666665*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 166666.6666666665)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
@@ -3271,9 +3289,9 @@ namespace mkpp::generated::gocart {
           double F1_18 = 0.0;
           double F1_19 = 0.0;
           double F1_20 = 0.0;
-          double F1_21 = -0.0025*S_21*S_23 - 1.0*S_21*jvals[0];
+          double F1_21 = -0.0025*S_21*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 1.0*S_21*jvals[0];
           double F1_22 = -1.2e-11*S_24*S_22*exp(-260.0/Temp) + 2.0*S_21*jvals[0] - 3.3e-12*S_22*S_23;
-          double F1_23 = 1.9e-13*S_24*S_25*exp(-520.0/Temp) + 1.2e-11*S_24*S_22*exp(-260.0/Temp) - 2.5e-05*S_20*S_23 - 2.5e-05*S_19*S_23 - 2.5e-05*S_18*S_23 - 2.5e-05*S_17*S_23 - 2.5e-05*S_16*S_23 - 0.0025*S_21*S_23 - 3.3e-12*S_22*S_23 - 0.00025*S_23*S_15 - 0.00025*S_23*S_14 - 0.00025*S_23*S_13 - 0.00025*S_23*S_12 - 0.00025*S_23*S_11;
+          double F1_23 = 1.9e-13*S_24*S_25*exp(-520.0/Temp) + 1.2e-11*S_24*S_22*exp(-260.0/Temp) - 2.5e-05*S_20*S_23 - 2.5e-05*S_19*S_23 - 2.5e-05*S_18*S_23 - 2.5e-05*S_17*S_23 - 2.5e-05*S_16*S_23 - 0.0025*S_21*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 3.3e-12*S_22*S_23 - 0.00025*S_15*S_23 - 0.00025*S_14*S_23 - 0.00025*S_13*S_23 - 0.00025*S_12*S_23 - 0.00025*S_11*S_23;
           double F1_24 = -1.9e-13*S_24*S_25*exp(-520.0/Temp) - 1.2e-11*S_24*S_22*exp(-260.0/Temp);
           double F1_25 = -1.9e-13*S_24*S_25*exp(-520.0/Temp);
           // Block 0: K1 forward sub [OC1, OC2, BC1, BC2, SO4]
@@ -3294,15 +3312,15 @@ namespace mkpp::generated::gocart {
           double y1_9 = F1_9 - L_9_4 * y1_4 - L_9_5 * y1_5 - L_9_6 * y1_6 - L_9_7 * y1_7 - L_9_8 * y1_8;
           // Block 6: K1 forward sub [NH3]
           double y1_10 = F1_10 - L_10_4 * y1_4 - L_10_5 * y1_5 - L_10_6 * y1_6 - L_10_7 * y1_7 - L_10_8 * y1_8 - L_10_9 * y1_9;
-          // Block 7: K1 forward sub [SS5]
+          // Block 7: K1 forward sub [SEAS5]
           double y1_11 = F1_11;
-          // Block 8: K1 forward sub [SS4]
+          // Block 8: K1 forward sub [SEAS4]
           double y1_12 = F1_12;
-          // Block 9: K1 forward sub [SS3]
+          // Block 9: K1 forward sub [SEAS3]
           double y1_13 = F1_13;
-          // Block 10: K1 forward sub [SS2]
+          // Block 10: K1 forward sub [SEAS2]
           double y1_14 = F1_14;
-          // Block 11: K1 forward sub [SS1]
+          // Block 11: K1 forward sub [SEAS1]
           double y1_15 = F1_15;
           // Block 12: K1 forward sub [DUST5]
           double y1_16 = F1_16;
@@ -3335,15 +3353,15 @@ namespace mkpp::generated::gocart {
           double K1_17 = y1_17 / U_17_17;
           // Block 12: K1 backward sub [DUST5]
           double K1_16 = y1_16 / U_16_16;
-          // Block 11: K1 backward sub [SS1]
+          // Block 11: K1 backward sub [SEAS1]
           double K1_15 = y1_15 / U_15_15;
-          // Block 10: K1 backward sub [SS2]
+          // Block 10: K1 backward sub [SEAS2]
           double K1_14 = y1_14 / U_14_14;
-          // Block 9: K1 backward sub [SS3]
+          // Block 9: K1 backward sub [SEAS3]
           double K1_13 = y1_13 / U_13_13;
-          // Block 8: K1 backward sub [SS4]
+          // Block 8: K1 backward sub [SEAS4]
           double K1_12 = y1_12 / U_12_12;
-          // Block 7: K1 backward sub [SS5]
+          // Block 7: K1 backward sub [SEAS5]
           double K1_11 = y1_11 / U_11_11;
           // Block 6: K1 backward sub [NH3]
           double K1_10 = (y1_10 - U_10_11 * K1_11 - U_10_12 * K1_12 - U_10_13 * K1_13 - U_10_14 * K1_14 - U_10_15 * K1_15 - U_10_16 * K1_16 - U_10_17 * K1_17 - U_10_18 * K1_18 - U_10_19 * K1_19 - U_10_20 * K1_20 - U_10_21 * K1_21 - U_10_22 * K1_22 - U_10_23 * K1_23) / U_10_10;
@@ -3398,7 +3416,7 @@ namespace mkpp::generated::gocart {
           double F2_1 = 5e-06*Y2_0;
           double F2_2 = -5e-06*Y2_2;
           double F2_3 = 5e-06*Y2_2;
-          double F2_4 = 2.5e-05*Y2_20*Y2_23 + 2.5e-05*Y2_19*Y2_23 + 2.5e-05*Y2_18*Y2_23 + 2.5e-05*Y2_17*Y2_23 + 2.5e-05*Y2_16*Y2_23 + 0.0025*Y2_21*Y2_23 + 3.3e-12*Y2_22*Y2_23 + 0.00025*Y2_23*Y2_15 + 0.00025*Y2_23*Y2_14 + 0.00025*Y2_23*Y2_13 + 0.00025*Y2_23*Y2_12 + 0.00025*Y2_23*Y2_11;
+          double F2_4 = 2.5e-05*Y2_20*Y2_23 + 2.5e-05*Y2_19*Y2_23 + 2.5e-05*Y2_18*Y2_23 + 2.5e-05*Y2_17*Y2_23 + 2.5e-05*Y2_16*Y2_23 + 0.0025*Y2_21*Y2_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) + 3.3e-12*Y2_22*Y2_23 + 0.00025*Y2_15*Y2_23 + 0.00025*Y2_14*Y2_23 + 0.00025*Y2_13*Y2_23 + 0.00025*Y2_12*Y2_23 + 0.00025*Y2_11*Y2_23;
           double F2_5 = -0.025*Y2_20*Y2_5 - 0.025*Y2_19*Y2_5 - 0.025*Y2_18*Y2_5 - 0.025*Y2_17*Y2_5 - 0.025*Y2_16*Y2_5 - 0.025*Y2_5*Y2_15 - 0.025*Y2_5*Y2_14 - 0.025*Y2_5*Y2_13 - 0.025*Y2_5*Y2_12 - 0.025*Y2_5*Y2_11 + 1000000.0*Y2_6 + 1000000.0*Y2_8 + 1000000.0*Y2_7 - (500000.0*((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 40.0)/sqrt(pow((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/2.0)*((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 20.0)/sqrt(pow((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*Y2_5 + (1.0/4.0)*Y2_10 + (1.0/4.0)*Y2_9 + (1.0/4.0)*Y2_6 + (1.0/4.0)*Y2_8 + (1.0/4.0)*Y2_7 - 1.0/2.0*Y2_23 - 1.0/2.0*Y2_4 - 1.0/4.0*sqrt(pow(-Y2_5 + Y2_10 + Y2_9 - Y2_6 - Y2_8 - Y2_7 - 2*Y2_23 - 2*Y2_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*Y2_5 + (1.0/2.0)*Y2_10 + (1.0/2.0)*Y2_9 + (1.0/2.0)*Y2_6 + (1.0/2.0)*Y2_8 + (1.0/2.0)*Y2_7 - Y2_23 - Y2_4 - 1.0/2.0*sqrt(pow(-Y2_5 + Y2_10 + Y2_9 - Y2_6 - Y2_8 - Y2_7 - 2*Y2_23 - 2*Y2_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
           double F2_6 = 0.025*Y2_20*Y2_5 + 0.025*Y2_17*Y2_5 + 0.025*Y2_5*Y2_14 + 0.025*Y2_5*Y2_11 - 1000000.0*Y2_6 + (166666.6666666665*((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 40.0)/sqrt(pow((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 40.0, 2) + 1) + 166666.6666666665)*((1.0/2.0)*((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 20.0)/sqrt(pow((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*Y2_5 + (1.0/4.0)*Y2_10 + (1.0/4.0)*Y2_9 + (1.0/4.0)*Y2_6 + (1.0/4.0)*Y2_8 + (1.0/4.0)*Y2_7 - 1.0/2.0*Y2_23 - 1.0/2.0*Y2_4 - 1.0/4.0*sqrt(pow(-Y2_5 + Y2_10 + Y2_9 - Y2_6 - Y2_8 - Y2_7 - 2*Y2_23 - 2*Y2_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*Y2_5 + (1.0/2.0)*Y2_10 + (1.0/2.0)*Y2_9 + (1.0/2.0)*Y2_6 + (1.0/2.0)*Y2_8 + (1.0/2.0)*Y2_7 - Y2_23 - Y2_4 - 1.0/2.0*sqrt(pow(-Y2_5 + Y2_10 + Y2_9 - Y2_6 - Y2_8 - Y2_7 - 2*Y2_23 - 2*Y2_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
           double F2_7 = 0.025*Y2_18*Y2_5 + 0.025*Y2_5*Y2_15 + 0.025*Y2_5*Y2_12 - 1000000.0*Y2_7 + (166666.6666666665*((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 40.0)/sqrt(pow((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 40.0, 2) + 1) + 166666.6666666665)*((1.0/2.0)*((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 20.0)/sqrt(pow((20.0*Y2_10 + 20.0*Y2_9)/(Y2_23 + Y2_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*Y2_5 + (1.0/4.0)*Y2_10 + (1.0/4.0)*Y2_9 + (1.0/4.0)*Y2_6 + (1.0/4.0)*Y2_8 + (1.0/4.0)*Y2_7 - 1.0/2.0*Y2_23 - 1.0/2.0*Y2_4 - 1.0/4.0*sqrt(pow(-Y2_5 + Y2_10 + Y2_9 - Y2_6 - Y2_8 - Y2_7 - 2*Y2_23 - 2*Y2_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*Y2_5 + (1.0/2.0)*Y2_10 + (1.0/2.0)*Y2_9 + (1.0/2.0)*Y2_6 + (1.0/2.0)*Y2_8 + (1.0/2.0)*Y2_7 - Y2_23 - Y2_4 - 1.0/2.0*sqrt(pow(-Y2_5 + Y2_10 + Y2_9 - Y2_6 - Y2_8 - Y2_7 - 2*Y2_23 - 2*Y2_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
@@ -3415,9 +3433,9 @@ namespace mkpp::generated::gocart {
           double F2_18 = 0.0;
           double F2_19 = 0.0;
           double F2_20 = 0.0;
-          double F2_21 = -0.0025*Y2_21*Y2_23 - 1.0*Y2_21*jvals[0];
+          double F2_21 = -0.0025*Y2_21*Y2_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 1.0*Y2_21*jvals[0];
           double F2_22 = -1.2e-11*Y2_24*Y2_22*exp(-260.0/Temp) + 2.0*Y2_21*jvals[0] - 3.3e-12*Y2_22*Y2_23;
-          double F2_23 = 1.9e-13*Y2_24*Y2_25*exp(-520.0/Temp) + 1.2e-11*Y2_24*Y2_22*exp(-260.0/Temp) - 2.5e-05*Y2_20*Y2_23 - 2.5e-05*Y2_19*Y2_23 - 2.5e-05*Y2_18*Y2_23 - 2.5e-05*Y2_17*Y2_23 - 2.5e-05*Y2_16*Y2_23 - 0.0025*Y2_21*Y2_23 - 3.3e-12*Y2_22*Y2_23 - 0.00025*Y2_23*Y2_15 - 0.00025*Y2_23*Y2_14 - 0.00025*Y2_23*Y2_13 - 0.00025*Y2_23*Y2_12 - 0.00025*Y2_23*Y2_11;
+          double F2_23 = 1.9e-13*Y2_24*Y2_25*exp(-520.0/Temp) + 1.2e-11*Y2_24*Y2_22*exp(-260.0/Temp) - 2.5e-05*Y2_20*Y2_23 - 2.5e-05*Y2_19*Y2_23 - 2.5e-05*Y2_18*Y2_23 - 2.5e-05*Y2_17*Y2_23 - 2.5e-05*Y2_16*Y2_23 - 0.0025*Y2_21*Y2_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 3.3e-12*Y2_22*Y2_23 - 0.00025*Y2_15*Y2_23 - 0.00025*Y2_14*Y2_23 - 0.00025*Y2_13*Y2_23 - 0.00025*Y2_12*Y2_23 - 0.00025*Y2_11*Y2_23;
           double F2_24 = -1.9e-13*Y2_24*Y2_25*exp(-520.0/Temp) - 1.2e-11*Y2_24*Y2_22*exp(-260.0/Temp);
           double F2_25 = -1.9e-13*Y2_24*Y2_25*exp(-520.0/Temp);
           // RHS for stage 2
@@ -3465,15 +3483,15 @@ namespace mkpp::generated::gocart {
           double y2_9 = rhs2_9 - L_9_4 * y2_4 - L_9_5 * y2_5 - L_9_6 * y2_6 - L_9_7 * y2_7 - L_9_8 * y2_8;
           // Block 6: K2 forward sub [NH3]
           double y2_10 = rhs2_10 - L_10_4 * y2_4 - L_10_5 * y2_5 - L_10_6 * y2_6 - L_10_7 * y2_7 - L_10_8 * y2_8 - L_10_9 * y2_9;
-          // Block 7: K2 forward sub [SS5]
+          // Block 7: K2 forward sub [SEAS5]
           double y2_11 = rhs2_11;
-          // Block 8: K2 forward sub [SS4]
+          // Block 8: K2 forward sub [SEAS4]
           double y2_12 = rhs2_12;
-          // Block 9: K2 forward sub [SS3]
+          // Block 9: K2 forward sub [SEAS3]
           double y2_13 = rhs2_13;
-          // Block 10: K2 forward sub [SS2]
+          // Block 10: K2 forward sub [SEAS2]
           double y2_14 = rhs2_14;
-          // Block 11: K2 forward sub [SS1]
+          // Block 11: K2 forward sub [SEAS1]
           double y2_15 = rhs2_15;
           // Block 12: K2 forward sub [DUST5]
           double y2_16 = rhs2_16;
@@ -3506,15 +3524,15 @@ namespace mkpp::generated::gocart {
           double K2_17 = y2_17 / U_17_17;
           // Block 12: K2 backward sub [DUST5]
           double K2_16 = y2_16 / U_16_16;
-          // Block 11: K2 backward sub [SS1]
+          // Block 11: K2 backward sub [SEAS1]
           double K2_15 = y2_15 / U_15_15;
-          // Block 10: K2 backward sub [SS2]
+          // Block 10: K2 backward sub [SEAS2]
           double K2_14 = y2_14 / U_14_14;
-          // Block 9: K2 backward sub [SS3]
+          // Block 9: K2 backward sub [SEAS3]
           double K2_13 = y2_13 / U_13_13;
-          // Block 8: K2 backward sub [SS4]
+          // Block 8: K2 backward sub [SEAS4]
           double K2_12 = y2_12 / U_12_12;
-          // Block 7: K2 backward sub [SS5]
+          // Block 7: K2 backward sub [SEAS5]
           double K2_11 = y2_11 / U_11_11;
           // Block 6: K2 backward sub [NH3]
           double K2_10 = (y2_10 - U_10_11 * K2_11 - U_10_12 * K2_12 - U_10_13 * K2_13 - U_10_14 * K2_14 - U_10_15 * K2_15 - U_10_16 * K2_16 - U_10_17 * K2_17 - U_10_18 * K2_18 - U_10_19 * K2_19 - U_10_20 * K2_20 - U_10_21 * K2_21 - U_10_22 * K2_22 - U_10_23 * K2_23) / U_10_10;
@@ -3610,15 +3628,15 @@ namespace mkpp::generated::gocart {
           double y3_9 = rhs3_9 - L_9_4 * y3_4 - L_9_5 * y3_5 - L_9_6 * y3_6 - L_9_7 * y3_7 - L_9_8 * y3_8;
           // Block 6: K3 forward sub [NH3]
           double y3_10 = rhs3_10 - L_10_4 * y3_4 - L_10_5 * y3_5 - L_10_6 * y3_6 - L_10_7 * y3_7 - L_10_8 * y3_8 - L_10_9 * y3_9;
-          // Block 7: K3 forward sub [SS5]
+          // Block 7: K3 forward sub [SEAS5]
           double y3_11 = rhs3_11;
-          // Block 8: K3 forward sub [SS4]
+          // Block 8: K3 forward sub [SEAS4]
           double y3_12 = rhs3_12;
-          // Block 9: K3 forward sub [SS3]
+          // Block 9: K3 forward sub [SEAS3]
           double y3_13 = rhs3_13;
-          // Block 10: K3 forward sub [SS2]
+          // Block 10: K3 forward sub [SEAS2]
           double y3_14 = rhs3_14;
-          // Block 11: K3 forward sub [SS1]
+          // Block 11: K3 forward sub [SEAS1]
           double y3_15 = rhs3_15;
           // Block 12: K3 forward sub [DUST5]
           double y3_16 = rhs3_16;
@@ -3651,15 +3669,15 @@ namespace mkpp::generated::gocart {
           double K3_17 = y3_17 / U_17_17;
           // Block 12: K3 backward sub [DUST5]
           double K3_16 = y3_16 / U_16_16;
-          // Block 11: K3 backward sub [SS1]
+          // Block 11: K3 backward sub [SEAS1]
           double K3_15 = y3_15 / U_15_15;
-          // Block 10: K3 backward sub [SS2]
+          // Block 10: K3 backward sub [SEAS2]
           double K3_14 = y3_14 / U_14_14;
-          // Block 9: K3 backward sub [SS3]
+          // Block 9: K3 backward sub [SEAS3]
           double K3_13 = y3_13 / U_13_13;
-          // Block 8: K3 backward sub [SS4]
+          // Block 8: K3 backward sub [SEAS4]
           double K3_12 = y3_12 / U_12_12;
-          // Block 7: K3 backward sub [SS5]
+          // Block 7: K3 backward sub [SEAS5]
           double K3_11 = y3_11 / U_11_11;
           // Block 6: K3 backward sub [NH3]
           double K3_10 = (y3_10 - U_10_11 * K3_11 - U_10_12 * K3_12 - U_10_13 * K3_13 - U_10_14 * K3_14 - U_10_15 * K3_15 - U_10_16 * K3_16 - U_10_17 * K3_17 - U_10_18 * K3_18 - U_10_19 * K3_19 - U_10_20 * K3_20 - U_10_21 * K3_21 - U_10_22 * K3_22 - U_10_23 * K3_23) / U_10_10;
@@ -4052,9 +4070,9 @@ namespace mkpp::generated::gocart {
               double J_4_18 = 2.5e-05*S_23;
               double J_4_19 = 2.5e-05*S_23;
               double J_4_20 = 2.5e-05*S_23;
-              double J_4_21 = 0.0025*S_23;
+              double J_4_21 = 0.0025*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
               double J_4_22 = 3.3e-12*S_23;
-              double J_4_23 = 2.5e-05*S_20 + 2.5e-05*S_19 + 2.5e-05*S_18 + 2.5e-05*S_17 + 2.5e-05*S_16 + 0.0025*S_21 + 3.3e-12*S_22 + 0.00025*S_15 + 0.00025*S_14 + 0.00025*S_13 + 0.00025*S_12 + 0.00025*S_11;
+              double J_4_23 = 2.5e-05*S_20 + 2.5e-05*S_19 + 2.5e-05*S_18 + 2.5e-05*S_17 + 2.5e-05*S_16 + 0.0025*S_21*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) + 3.3e-12*S_22 + 0.00025*S_15 + 0.00025*S_14 + 0.00025*S_13 + 0.00025*S_12 + 0.00025*S_11;
               double J_5_4 = (-500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) - 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(-2 - (2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 1.0/2.0 - 1.0/4.0*(2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((10.0*S_10 + 10.0*S_9)*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1, 3.0/2.0)*pow(S_23 + S_4 + 1e-30, 2)) - (10.0*S_10 + 10.0*S_9)/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1)*pow(S_23 + S_4 + 1e-30, 2)))*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20)) - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 500000.0)*((10.0*S_10 + 10.0*S_9)*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*pow(S_23 + S_4 + 1e-30, 2)) - (10.0*S_10 + 10.0*S_9)/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*pow(S_23 + S_4 + 1e-30, 2)))*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
               double J_5_5 = -0.025*S_20 - 0.025*S_19 - 0.025*S_18 - 0.025*S_17 - 0.025*S_16 - 0.025*S_15 - 0.025*S_14 - 0.025*S_13 - 0.025*S_12 - 0.025*S_11 - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(1 - (S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 1.0/4.0 - 1.0/4.0*(S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)));
               double J_5_6 = (-500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) - 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(1 - (S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 1.0/4.0 - 1.0/4.0*(S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + 1000000.0;
@@ -4123,8 +4141,8 @@ namespace mkpp::generated::gocart {
               double J_10_9 = (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/8.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/8.0 + (1.0/4.0)*((1.0/2.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/2.0 + (1.0/2.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20))/sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20) + (1.0/8.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + (-10000000.0*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*(S_23 + S_4 + 1e-30)) + 10000000.0/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*(S_23 + S_4 + 1e-30)))*(-1.0/8.0*S_5 + (3.0/8.0)*S_10 + (3.0/8.0)*S_9 - 1.0/8.0*S_6 - 1.0/8.0*S_8 - 1.0/8.0*S_7 - 3.0/4.0*S_23 - 3.0/4.0*S_4 + (1.0/8.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/4.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + (1.0/2.0)*sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20));
               double J_10_10 = (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/8.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/8.0 + (1.0/4.0)*((1.0/2.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/2.0 + (1.0/2.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20))/sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20) + (1.0/8.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + (-10000000.0*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*(S_23 + S_4 + 1e-30)) + 10000000.0/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*(S_23 + S_4 + 1e-30)))*(-1.0/8.0*S_5 + (3.0/8.0)*S_10 + (3.0/8.0)*S_9 - 1.0/8.0*S_6 - 1.0/8.0*S_8 - 1.0/8.0*S_7 - 3.0/4.0*S_23 - 3.0/4.0*S_4 + (1.0/8.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/4.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + (1.0/2.0)*sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20)) - 1000000.0;
               double J_10_23 = (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/8.0)*(2 + (2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 3.0/4.0 + (1.0/4.0)*((1.0/2.0)*(2 + (2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 3 + (1.0/2.0)*(2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20))/sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20) + (1.0/8.0)*(2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + (1000000.0*(10.0*S_10 + 10.0*S_9)*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*pow(S_23 + S_4 + 1e-30, 2)) - 1000000.0*(10.0*S_10 + 10.0*S_9)/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*pow(S_23 + S_4 + 1e-30, 2)))*(-1.0/8.0*S_5 + (3.0/8.0)*S_10 + (3.0/8.0)*S_9 - 1.0/8.0*S_6 - 1.0/8.0*S_8 - 1.0/8.0*S_7 - 3.0/4.0*S_23 - 3.0/4.0*S_4 + (1.0/8.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/4.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + (1.0/2.0)*sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20));
-              double J_21_21 = -0.0025*S_23 - 1.0*jvals[0];
-              double J_21_23 = -0.0025*S_21;
+              double J_21_21 = -0.0025*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 1.0*jvals[0];
+              double J_21_23 = -0.0025*S_21*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
               double J_22_21 = 2.0*jvals[0];
               double J_22_22 = -1.2e-11*S_24*exp(-260.0/Temp) - 3.3e-12*S_23;
               double J_22_23 = -3.3e-12*S_22;
@@ -4139,9 +4157,9 @@ namespace mkpp::generated::gocart {
               double J_23_18 = -2.5e-05*S_23;
               double J_23_19 = -2.5e-05*S_23;
               double J_23_20 = -2.5e-05*S_23;
-              double J_23_21 = -0.0025*S_23;
+              double J_23_21 = -0.0025*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
               double J_23_22 = 1.2e-11*S_24*exp(-260.0/Temp) - 3.3e-12*S_23;
-              double J_23_23 = -2.5e-05*S_20 - 2.5e-05*S_19 - 2.5e-05*S_18 - 2.5e-05*S_17 - 2.5e-05*S_16 - 0.0025*S_21 - 3.3e-12*S_22 - 0.00025*S_15 - 0.00025*S_14 - 0.00025*S_13 - 0.00025*S_12 - 0.00025*S_11;
+              double J_23_23 = -2.5e-05*S_20 - 2.5e-05*S_19 - 2.5e-05*S_18 - 2.5e-05*S_17 - 2.5e-05*S_16 - 0.0025*S_21*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 3.3e-12*S_22 - 0.00025*S_15 - 0.00025*S_14 - 0.00025*S_13 - 0.00025*S_12 - 0.00025*S_11;
               double J_23_24 = 1.9e-13*S_25*exp(-520.0/Temp) + 1.2e-11*S_22*exp(-260.0/Temp);
               double J_23_25 = 1.9e-13*S_24*exp(-520.0/Temp);
               double J_24_22 = -1.2e-11*S_24*exp(-260.0/Temp);
@@ -4246,15 +4264,15 @@ namespace mkpp::generated::gocart {
               double W_10_9 = -J_10_9;
               double W_10_10 = inv_g_h - J_10_10;
               double W_10_23 = -J_10_23;
-              // Block 7: species [SS5]
+              // Block 7: species [SEAS5]
               double W_11_11 = inv_g_h;
-              // Block 8: species [SS4]
+              // Block 8: species [SEAS4]
               double W_12_12 = inv_g_h;
-              // Block 9: species [SS3]
+              // Block 9: species [SEAS3]
               double W_13_13 = inv_g_h;
-              // Block 10: species [SS2]
+              // Block 10: species [SEAS2]
               double W_14_14 = inv_g_h;
-              // Block 11: species [SS1]
+              // Block 11: species [SEAS1]
               double W_15_15 = inv_g_h;
               // Block 12: species [DUST5]
               double W_16_16 = inv_g_h;
@@ -4442,20 +4460,20 @@ namespace mkpp::generated::gocart {
               double U_10_21 = 0.0 - L_10_4 * U_4_21 - L_10_5 * U_5_21 - L_10_6 * U_6_21 - L_10_7 * U_7_21 - L_10_8 * U_8_21 - L_10_9 * U_9_21;
               double U_10_22 = 0.0 - L_10_4 * U_4_22 - L_10_5 * U_5_22 - L_10_6 * U_6_22 - L_10_7 * U_7_22 - L_10_8 * U_8_22 - L_10_9 * U_9_22;
               double U_10_23 = W_10_23 - L_10_4 * U_4_23 - L_10_5 * U_5_23 - L_10_6 * U_6_23 - L_10_7 * U_7_23 - L_10_8 * U_8_23 - L_10_9 * U_9_23;
-              // Block 7: species [SS5]
+              // Block 7: species [SEAS5]
               double U_11_11 = W_11_11;
               // Block 16: species [DUST1, H2O2, OH, SO2, DMS, NO3]
               double L_23_11 = (W_23_11) / U_11_11;
-              // Block 8: species [SS4]
+              // Block 8: species [SEAS4]
               double U_12_12 = W_12_12;
               double L_23_12 = (W_23_12) / U_12_12;
-              // Block 9: species [SS3]
+              // Block 9: species [SEAS3]
               double U_13_13 = W_13_13;
               double L_23_13 = (W_23_13) / U_13_13;
-              // Block 10: species [SS2]
+              // Block 10: species [SEAS2]
               double U_14_14 = W_14_14;
               double L_23_14 = (W_23_14) / U_14_14;
-              // Block 11: species [SS1]
+              // Block 11: species [SEAS1]
               double U_15_15 = W_15_15;
               double L_23_15 = (W_23_15) / U_15_15;
               // Block 12: species [DUST5]
@@ -4567,15 +4585,15 @@ namespace mkpp::generated::gocart {
               double yt3_9 = (v3_9 - U_5_9 * yt3_5 - U_6_9 * yt3_6 - U_7_9 * yt3_7 - U_8_9 * yt3_8) / U_9_9;
               // Block 6: u3 transpose forward sub [NH3]
               double yt3_10 = (v3_10 - U_5_10 * yt3_5 - U_6_10 * yt3_6 - U_7_10 * yt3_7 - U_8_10 * yt3_8 - U_9_10 * yt3_9) / U_10_10;
-              // Block 7: u3 transpose forward sub [SS5]
+              // Block 7: u3 transpose forward sub [SEAS5]
               double yt3_11 = (v3_11 - U_4_11 * yt3_4 - U_5_11 * yt3_5 - U_6_11 * yt3_6 - U_7_11 * yt3_7 - U_8_11 * yt3_8 - U_9_11 * yt3_9 - U_10_11 * yt3_10) / U_11_11;
-              // Block 8: u3 transpose forward sub [SS4]
+              // Block 8: u3 transpose forward sub [SEAS4]
               double yt3_12 = (v3_12 - U_4_12 * yt3_4 - U_5_12 * yt3_5 - U_6_12 * yt3_6 - U_7_12 * yt3_7 - U_8_12 * yt3_8 - U_9_12 * yt3_9 - U_10_12 * yt3_10) / U_12_12;
-              // Block 9: u3 transpose forward sub [SS3]
+              // Block 9: u3 transpose forward sub [SEAS3]
               double yt3_13 = (v3_13 - U_4_13 * yt3_4 - U_5_13 * yt3_5 - U_6_13 * yt3_6 - U_7_13 * yt3_7 - U_8_13 * yt3_8 - U_9_13 * yt3_9 - U_10_13 * yt3_10) / U_13_13;
-              // Block 10: u3 transpose forward sub [SS2]
+              // Block 10: u3 transpose forward sub [SEAS2]
               double yt3_14 = (v3_14 - U_4_14 * yt3_4 - U_5_14 * yt3_5 - U_6_14 * yt3_6 - U_7_14 * yt3_7 - U_8_14 * yt3_8 - U_9_14 * yt3_9 - U_10_14 * yt3_10) / U_14_14;
-              // Block 11: u3 transpose forward sub [SS1]
+              // Block 11: u3 transpose forward sub [SEAS1]
               double yt3_15 = (v3_15 - U_4_15 * yt3_4 - U_5_15 * yt3_5 - U_6_15 * yt3_6 - U_7_15 * yt3_7 - U_8_15 * yt3_8 - U_9_15 * yt3_9 - U_10_15 * yt3_10) / U_15_15;
               // Block 12: u3 transpose forward sub [DUST5]
               double yt3_16 = (v3_16 - U_4_16 * yt3_4 - U_5_16 * yt3_5 - U_6_16 * yt3_6 - U_7_16 * yt3_7 - U_8_16 * yt3_8 - U_9_16 * yt3_9 - U_10_16 * yt3_10) / U_16_16;
@@ -4607,15 +4625,15 @@ namespace mkpp::generated::gocart {
               double u3_17 = yt3_17 - L_23_17 * u3_23;
               // Block 12: u3 transpose backward sub [DUST5]
               double u3_16 = yt3_16 - L_23_16 * u3_23;
-              // Block 11: u3 transpose backward sub [SS1]
+              // Block 11: u3 transpose backward sub [SEAS1]
               double u3_15 = yt3_15 - L_23_15 * u3_23;
-              // Block 10: u3 transpose backward sub [SS2]
+              // Block 10: u3 transpose backward sub [SEAS2]
               double u3_14 = yt3_14 - L_23_14 * u3_23;
-              // Block 9: u3 transpose backward sub [SS3]
+              // Block 9: u3 transpose backward sub [SEAS3]
               double u3_13 = yt3_13 - L_23_13 * u3_23;
-              // Block 8: u3 transpose backward sub [SS4]
+              // Block 8: u3 transpose backward sub [SEAS4]
               double u3_12 = yt3_12 - L_23_12 * u3_23;
-              // Block 7: u3 transpose backward sub [SS5]
+              // Block 7: u3 transpose backward sub [SEAS5]
               double u3_11 = yt3_11 - L_23_11 * u3_23;
               // Block 6: u3 transpose backward sub [NH3]
               double u3_10 = yt3_10;
@@ -4684,15 +4702,15 @@ namespace mkpp::generated::gocart {
               double yt2_9 = (v2_9 - U_5_9 * yt2_5 - U_6_9 * yt2_6 - U_7_9 * yt2_7 - U_8_9 * yt2_8) / U_9_9;
               // Block 6: u2 transpose forward sub [NH3]
               double yt2_10 = (v2_10 - U_5_10 * yt2_5 - U_6_10 * yt2_6 - U_7_10 * yt2_7 - U_8_10 * yt2_8 - U_9_10 * yt2_9) / U_10_10;
-              // Block 7: u2 transpose forward sub [SS5]
+              // Block 7: u2 transpose forward sub [SEAS5]
               double yt2_11 = (v2_11 - U_4_11 * yt2_4 - U_5_11 * yt2_5 - U_6_11 * yt2_6 - U_7_11 * yt2_7 - U_8_11 * yt2_8 - U_9_11 * yt2_9 - U_10_11 * yt2_10) / U_11_11;
-              // Block 8: u2 transpose forward sub [SS4]
+              // Block 8: u2 transpose forward sub [SEAS4]
               double yt2_12 = (v2_12 - U_4_12 * yt2_4 - U_5_12 * yt2_5 - U_6_12 * yt2_6 - U_7_12 * yt2_7 - U_8_12 * yt2_8 - U_9_12 * yt2_9 - U_10_12 * yt2_10) / U_12_12;
-              // Block 9: u2 transpose forward sub [SS3]
+              // Block 9: u2 transpose forward sub [SEAS3]
               double yt2_13 = (v2_13 - U_4_13 * yt2_4 - U_5_13 * yt2_5 - U_6_13 * yt2_6 - U_7_13 * yt2_7 - U_8_13 * yt2_8 - U_9_13 * yt2_9 - U_10_13 * yt2_10) / U_13_13;
-              // Block 10: u2 transpose forward sub [SS2]
+              // Block 10: u2 transpose forward sub [SEAS2]
               double yt2_14 = (v2_14 - U_4_14 * yt2_4 - U_5_14 * yt2_5 - U_6_14 * yt2_6 - U_7_14 * yt2_7 - U_8_14 * yt2_8 - U_9_14 * yt2_9 - U_10_14 * yt2_10) / U_14_14;
-              // Block 11: u2 transpose forward sub [SS1]
+              // Block 11: u2 transpose forward sub [SEAS1]
               double yt2_15 = (v2_15 - U_4_15 * yt2_4 - U_5_15 * yt2_5 - U_6_15 * yt2_6 - U_7_15 * yt2_7 - U_8_15 * yt2_8 - U_9_15 * yt2_9 - U_10_15 * yt2_10) / U_15_15;
               // Block 12: u2 transpose forward sub [DUST5]
               double yt2_16 = (v2_16 - U_4_16 * yt2_4 - U_5_16 * yt2_5 - U_6_16 * yt2_6 - U_7_16 * yt2_7 - U_8_16 * yt2_8 - U_9_16 * yt2_9 - U_10_16 * yt2_10) / U_16_16;
@@ -4724,15 +4742,15 @@ namespace mkpp::generated::gocart {
               double u2_17 = yt2_17 - L_23_17 * u2_23;
               // Block 12: u2 transpose backward sub [DUST5]
               double u2_16 = yt2_16 - L_23_16 * u2_23;
-              // Block 11: u2 transpose backward sub [SS1]
+              // Block 11: u2 transpose backward sub [SEAS1]
               double u2_15 = yt2_15 - L_23_15 * u2_23;
-              // Block 10: u2 transpose backward sub [SS2]
+              // Block 10: u2 transpose backward sub [SEAS2]
               double u2_14 = yt2_14 - L_23_14 * u2_23;
-              // Block 9: u2 transpose backward sub [SS3]
+              // Block 9: u2 transpose backward sub [SEAS3]
               double u2_13 = yt2_13 - L_23_13 * u2_23;
-              // Block 8: u2 transpose backward sub [SS4]
+              // Block 8: u2 transpose backward sub [SEAS4]
               double u2_12 = yt2_12 - L_23_12 * u2_23;
-              // Block 7: u2 transpose backward sub [SS5]
+              // Block 7: u2 transpose backward sub [SEAS5]
               double u2_11 = yt2_11 - L_23_11 * u2_23;
               // Block 6: u2 transpose backward sub [NH3]
               double u2_10 = yt2_10;
@@ -4801,15 +4819,15 @@ namespace mkpp::generated::gocart {
               double yt1_9 = (v1_9 - U_5_9 * yt1_5 - U_6_9 * yt1_6 - U_7_9 * yt1_7 - U_8_9 * yt1_8) / U_9_9;
               // Block 6: u1 transpose forward sub [NH3]
               double yt1_10 = (v1_10 - U_5_10 * yt1_5 - U_6_10 * yt1_6 - U_7_10 * yt1_7 - U_8_10 * yt1_8 - U_9_10 * yt1_9) / U_10_10;
-              // Block 7: u1 transpose forward sub [SS5]
+              // Block 7: u1 transpose forward sub [SEAS5]
               double yt1_11 = (v1_11 - U_4_11 * yt1_4 - U_5_11 * yt1_5 - U_6_11 * yt1_6 - U_7_11 * yt1_7 - U_8_11 * yt1_8 - U_9_11 * yt1_9 - U_10_11 * yt1_10) / U_11_11;
-              // Block 8: u1 transpose forward sub [SS4]
+              // Block 8: u1 transpose forward sub [SEAS4]
               double yt1_12 = (v1_12 - U_4_12 * yt1_4 - U_5_12 * yt1_5 - U_6_12 * yt1_6 - U_7_12 * yt1_7 - U_8_12 * yt1_8 - U_9_12 * yt1_9 - U_10_12 * yt1_10) / U_12_12;
-              // Block 9: u1 transpose forward sub [SS3]
+              // Block 9: u1 transpose forward sub [SEAS3]
               double yt1_13 = (v1_13 - U_4_13 * yt1_4 - U_5_13 * yt1_5 - U_6_13 * yt1_6 - U_7_13 * yt1_7 - U_8_13 * yt1_8 - U_9_13 * yt1_9 - U_10_13 * yt1_10) / U_13_13;
-              // Block 10: u1 transpose forward sub [SS2]
+              // Block 10: u1 transpose forward sub [SEAS2]
               double yt1_14 = (v1_14 - U_4_14 * yt1_4 - U_5_14 * yt1_5 - U_6_14 * yt1_6 - U_7_14 * yt1_7 - U_8_14 * yt1_8 - U_9_14 * yt1_9 - U_10_14 * yt1_10) / U_14_14;
-              // Block 11: u1 transpose forward sub [SS1]
+              // Block 11: u1 transpose forward sub [SEAS1]
               double yt1_15 = (v1_15 - U_4_15 * yt1_4 - U_5_15 * yt1_5 - U_6_15 * yt1_6 - U_7_15 * yt1_7 - U_8_15 * yt1_8 - U_9_15 * yt1_9 - U_10_15 * yt1_10) / U_15_15;
               // Block 12: u1 transpose forward sub [DUST5]
               double yt1_16 = (v1_16 - U_4_16 * yt1_4 - U_5_16 * yt1_5 - U_6_16 * yt1_6 - U_7_16 * yt1_7 - U_8_16 * yt1_8 - U_9_16 * yt1_9 - U_10_16 * yt1_10) / U_16_16;
@@ -4841,15 +4859,15 @@ namespace mkpp::generated::gocart {
               double u1_17 = yt1_17 - L_23_17 * u1_23;
               // Block 12: u1 transpose backward sub [DUST5]
               double u1_16 = yt1_16 - L_23_16 * u1_23;
-              // Block 11: u1 transpose backward sub [SS1]
+              // Block 11: u1 transpose backward sub [SEAS1]
               double u1_15 = yt1_15 - L_23_15 * u1_23;
-              // Block 10: u1 transpose backward sub [SS2]
+              // Block 10: u1 transpose backward sub [SEAS2]
               double u1_14 = yt1_14 - L_23_14 * u1_23;
-              // Block 9: u1 transpose backward sub [SS3]
+              // Block 9: u1 transpose backward sub [SEAS3]
               double u1_13 = yt1_13 - L_23_13 * u1_23;
-              // Block 8: u1 transpose backward sub [SS4]
+              // Block 8: u1 transpose backward sub [SEAS4]
               double u1_12 = yt1_12 - L_23_12 * u1_23;
-              // Block 7: u1 transpose backward sub [SS5]
+              // Block 7: u1 transpose backward sub [SEAS5]
               double u1_11 = yt1_11 - L_23_11 * u1_23;
               // Block 6: u1 transpose backward sub [NH3]
               double u1_10 = yt1_10;
@@ -4988,9 +5006,9 @@ namespace mkpp::generated::gocart {
               double J_4_18 = 2.5e-05*S_23;
               double J_4_19 = 2.5e-05*S_23;
               double J_4_20 = 2.5e-05*S_23;
-              double J_4_21 = 0.0025*S_23;
+              double J_4_21 = 0.0025*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
               double J_4_22 = 3.3e-12*S_23;
-              double J_4_23 = 2.5e-05*S_20 + 2.5e-05*S_19 + 2.5e-05*S_18 + 2.5e-05*S_17 + 2.5e-05*S_16 + 0.0025*S_21 + 3.3e-12*S_22 + 0.00025*S_15 + 0.00025*S_14 + 0.00025*S_13 + 0.00025*S_12 + 0.00025*S_11;
+              double J_4_23 = 2.5e-05*S_20 + 2.5e-05*S_19 + 2.5e-05*S_18 + 2.5e-05*S_17 + 2.5e-05*S_16 + 0.0025*S_21*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) + 3.3e-12*S_22 + 0.00025*S_15 + 0.00025*S_14 + 0.00025*S_13 + 0.00025*S_12 + 0.00025*S_11;
               double J_5_4 = (-500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) - 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(-2 - (2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 1.0/2.0 - 1.0/4.0*(2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((10.0*S_10 + 10.0*S_9)*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1, 3.0/2.0)*pow(S_23 + S_4 + 1e-30, 2)) - (10.0*S_10 + 10.0*S_9)/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1)*pow(S_23 + S_4 + 1e-30, 2)))*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20)) - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 500000.0)*((10.0*S_10 + 10.0*S_9)*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*pow(S_23 + S_4 + 1e-30, 2)) - (10.0*S_10 + 10.0*S_9)/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*pow(S_23 + S_4 + 1e-30, 2)))*((1.0/4.0)*S_5 + (1.0/4.0)*S_10 + (1.0/4.0)*S_9 + (1.0/4.0)*S_6 + (1.0/4.0)*S_8 + (1.0/4.0)*S_7 - 1.0/2.0*S_23 - 1.0/2.0*S_4 - 1.0/4.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) + (1.0/2.0)*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20));
               double J_5_5 = -0.025*S_20 - 0.025*S_19 - 0.025*S_18 - 0.025*S_17 - 0.025*S_16 - 0.025*S_15 - 0.025*S_14 - 0.025*S_13 - 0.025*S_12 - 0.025*S_11 - (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(1 - (S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 1.0/4.0 - 1.0/4.0*(S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)));
               double J_5_6 = (-500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) - 500000.0)*((1.0/2.0)*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 20.0, 2) + 1) + 1.0/2.0)*((1.0/4.0)*(1 - (S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 1.0/4.0 - 1.0/4.0*(S_5 - S_10 - S_9 + S_6 + S_8 + S_7 + 2*S_23 + 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + 1000000.0;
@@ -5059,8 +5077,8 @@ namespace mkpp::generated::gocart {
               double J_10_9 = (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/8.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/8.0 + (1.0/4.0)*((1.0/2.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/2.0 + (1.0/2.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20))/sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20) + (1.0/8.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + (-10000000.0*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*(S_23 + S_4 + 1e-30)) + 10000000.0/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*(S_23 + S_4 + 1e-30)))*(-1.0/8.0*S_5 + (3.0/8.0)*S_10 + (3.0/8.0)*S_9 - 1.0/8.0*S_6 - 1.0/8.0*S_8 - 1.0/8.0*S_7 - 3.0/4.0*S_23 - 3.0/4.0*S_4 + (1.0/8.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/4.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + (1.0/2.0)*sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20));
               double J_10_10 = (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/8.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/8.0 + (1.0/4.0)*((1.0/2.0)*(-1 + (-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + 3.0/2.0 + (1.0/2.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20))/sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20) + (1.0/8.0)*(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + (-10000000.0*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*(S_23 + S_4 + 1e-30)) + 10000000.0/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*(S_23 + S_4 + 1e-30)))*(-1.0/8.0*S_5 + (3.0/8.0)*S_10 + (3.0/8.0)*S_9 - 1.0/8.0*S_6 - 1.0/8.0*S_8 - 1.0/8.0*S_7 - 3.0/4.0*S_23 - 3.0/4.0*S_4 + (1.0/8.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/4.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + (1.0/2.0)*sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20)) - 1000000.0;
               double J_10_23 = (500000.0*((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0)/sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1) + 500000.0)*((1.0/8.0)*(2 + (2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 3.0/4.0 + (1.0/4.0)*((1.0/2.0)*(2 + (2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))/sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) - 3 + (1.0/2.0)*(2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)))*(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20))/sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20) + (1.0/8.0)*(2*S_5 - 2*S_10 - 2*S_9 + 2*S_6 + 2*S_8 + 2*S_7 + 4*S_23 + 4*S_4)/sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp))) + (1000000.0*(10.0*S_10 + 10.0*S_9)*pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2)/(pow(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1, 3.0/2.0)*pow(S_23 + S_4 + 1e-30, 2)) - 1000000.0*(10.0*S_10 + 10.0*S_9)/(sqrt(pow((20.0*S_10 + 20.0*S_9)/(S_23 + S_4 + 1e-30) - 40.0, 2) + 1)*pow(S_23 + S_4 + 1e-30, 2)))*(-1.0/8.0*S_5 + (3.0/8.0)*S_10 + (3.0/8.0)*S_9 - 1.0/8.0*S_6 - 1.0/8.0*S_8 - 1.0/8.0*S_7 - 3.0/4.0*S_23 - 3.0/4.0*S_4 + (1.0/8.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/4.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20) + (1.0/2.0)*sqrt(pow(-1.0/4.0*S_5 + (3.0/4.0)*S_10 + (3.0/4.0)*S_9 - 1.0/4.0*S_6 - 1.0/4.0*S_8 - 1.0/4.0*S_7 - 3.0/2.0*S_23 - 3.0/2.0*S_4 + (1.0/4.0)*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)) - 1.0/2.0*sqrt(pow((1.0/2.0)*S_5 + (1.0/2.0)*S_10 + (1.0/2.0)*S_9 + (1.0/2.0)*S_6 + (1.0/2.0)*S_8 + (1.0/2.0)*S_7 - S_23 - S_4 - 1.0/2.0*sqrt(pow(-S_5 + S_10 + S_9 - S_6 - S_8 - S_7 - 2*S_23 - 2*S_4, 2) + 1.41511078464367e-29*exp(8989.05460668752/Temp)), 2) + 1e-20), 2) + 1e-20));
-              double J_21_21 = -0.0025*S_23 - 1.0*jvals[0];
-              double J_21_23 = -0.0025*S_21;
+              double J_21_21 = -0.0025*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 1.0*jvals[0];
+              double J_21_23 = -0.0025*S_21*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
               double J_22_21 = 2.0*jvals[0];
               double J_22_22 = -1.2e-11*S_24*exp(-260.0/Temp) - 3.3e-12*S_23;
               double J_22_23 = -3.3e-12*S_22;
@@ -5075,9 +5093,9 @@ namespace mkpp::generated::gocart {
               double J_23_18 = -2.5e-05*S_23;
               double J_23_19 = -2.5e-05*S_23;
               double J_23_20 = -2.5e-05*S_23;
-              double J_23_21 = -0.0025*S_23;
+              double J_23_21 = -0.0025*S_23*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0);
               double J_23_22 = 1.2e-11*S_24*exp(-260.0/Temp) - 3.3e-12*S_23;
-              double J_23_23 = -2.5e-05*S_20 - 2.5e-05*S_19 - 2.5e-05*S_18 - 2.5e-05*S_17 - 2.5e-05*S_16 - 0.0025*S_21 - 3.3e-12*S_22 - 0.00025*S_15 - 0.00025*S_14 - 0.00025*S_13 - 0.00025*S_12 - 0.00025*S_11;
+              double J_23_23 = -2.5e-05*S_20 - 2.5e-05*S_19 - 2.5e-05*S_18 - 2.5e-05*S_17 - 2.5e-05*S_16 - 0.0025*S_21*((1.0/2.0)*(100000000.0*CLW - 100.0)/sqrt(pow(100000000.0*CLW - 100.0, 2) + 1) + 1.0/2.0) - 3.3e-12*S_22 - 0.00025*S_15 - 0.00025*S_14 - 0.00025*S_13 - 0.00025*S_12 - 0.00025*S_11;
               double J_23_24 = 1.9e-13*S_25*exp(-520.0/Temp) + 1.2e-11*S_22*exp(-260.0/Temp);
               double J_23_25 = 1.9e-13*S_24*exp(-520.0/Temp);
               double J_24_22 = -1.2e-11*S_24*exp(-260.0/Temp);
@@ -5360,20 +5378,20 @@ namespace mkpp::generated::gocart {
               double U_10_21 = 0.0 - L_10_4 * U_4_21 - L_10_5 * U_5_21 - L_10_6 * U_6_21 - L_10_7 * U_7_21 - L_10_8 * U_8_21 - L_10_9 * U_9_21;
               double U_10_22 = 0.0 - L_10_4 * U_4_22 - L_10_5 * U_5_22 - L_10_6 * U_6_22 - L_10_7 * U_7_22 - L_10_8 * U_8_22 - L_10_9 * U_9_22;
               double U_10_23 = W_10_23 - L_10_4 * U_4_23 - L_10_5 * U_5_23 - L_10_6 * U_6_23 - L_10_7 * U_7_23 - L_10_8 * U_8_23 - L_10_9 * U_9_23;
-              // Block 7: species [SS5]
+              // Block 7: species [SEAS5]
               double U_11_11 = W_11_11;
               // Block 16: species [DUST1, H2O2, OH, SO2, DMS, NO3]
               double L_23_11 = (W_23_11) / U_11_11;
-              // Block 8: species [SS4]
+              // Block 8: species [SEAS4]
               double U_12_12 = W_12_12;
               double L_23_12 = (W_23_12) / U_12_12;
-              // Block 9: species [SS3]
+              // Block 9: species [SEAS3]
               double U_13_13 = W_13_13;
               double L_23_13 = (W_23_13) / U_13_13;
-              // Block 10: species [SS2]
+              // Block 10: species [SEAS2]
               double U_14_14 = W_14_14;
               double L_23_14 = (W_23_14) / U_14_14;
-              // Block 11: species [SS1]
+              // Block 11: species [SEAS1]
               double U_15_15 = W_15_15;
               double L_23_15 = (W_23_15) / U_15_15;
               // Block 12: species [DUST5]
@@ -5457,15 +5475,15 @@ namespace mkpp::generated::gocart {
               double tlm_y1_9 = tlm_rhs1_9 - L_9_4 * tlm_y1_4 - L_9_5 * tlm_y1_5 - L_9_6 * tlm_y1_6 - L_9_7 * tlm_y1_7 - L_9_8 * tlm_y1_8;
               // Block 6: dK1 forward sub [NH3]
               double tlm_y1_10 = tlm_rhs1_10 - L_10_4 * tlm_y1_4 - L_10_5 * tlm_y1_5 - L_10_6 * tlm_y1_6 - L_10_7 * tlm_y1_7 - L_10_8 * tlm_y1_8 - L_10_9 * tlm_y1_9;
-              // Block 7: dK1 forward sub [SS5]
+              // Block 7: dK1 forward sub [SEAS5]
               double tlm_y1_11 = tlm_rhs1_11;
-              // Block 8: dK1 forward sub [SS4]
+              // Block 8: dK1 forward sub [SEAS4]
               double tlm_y1_12 = tlm_rhs1_12;
-              // Block 9: dK1 forward sub [SS3]
+              // Block 9: dK1 forward sub [SEAS3]
               double tlm_y1_13 = tlm_rhs1_13;
-              // Block 10: dK1 forward sub [SS2]
+              // Block 10: dK1 forward sub [SEAS2]
               double tlm_y1_14 = tlm_rhs1_14;
-              // Block 11: dK1 forward sub [SS1]
+              // Block 11: dK1 forward sub [SEAS1]
               double tlm_y1_15 = tlm_rhs1_15;
               // Block 12: dK1 forward sub [DUST5]
               double tlm_y1_16 = tlm_rhs1_16;
@@ -5497,15 +5515,15 @@ namespace mkpp::generated::gocart {
               double dK1_17 = tlm_y1_17 / U_17_17;
               // Block 12: dK1 backward sub [DUST5]
               double dK1_16 = tlm_y1_16 / U_16_16;
-              // Block 11: dK1 backward sub [SS1]
+              // Block 11: dK1 backward sub [SEAS1]
               double dK1_15 = tlm_y1_15 / U_15_15;
-              // Block 10: dK1 backward sub [SS2]
+              // Block 10: dK1 backward sub [SEAS2]
               double dK1_14 = tlm_y1_14 / U_14_14;
-              // Block 9: dK1 backward sub [SS3]
+              // Block 9: dK1 backward sub [SEAS3]
               double dK1_13 = tlm_y1_13 / U_13_13;
-              // Block 8: dK1 backward sub [SS4]
+              // Block 8: dK1 backward sub [SEAS4]
               double dK1_12 = tlm_y1_12 / U_12_12;
-              // Block 7: dK1 backward sub [SS5]
+              // Block 7: dK1 backward sub [SEAS5]
               double dK1_11 = tlm_y1_11 / U_11_11;
               // Block 6: dK1 backward sub [NH3]
               double dK1_10 = (tlm_y1_10 - U_10_11 * dK1_11 - U_10_12 * dK1_12 - U_10_13 * dK1_13 - U_10_14 * dK1_14 - U_10_15 * dK1_15 - U_10_16 * dK1_16 - U_10_17 * dK1_17 - U_10_18 * dK1_18 - U_10_19 * dK1_19 - U_10_20 * dK1_20 - U_10_21 * dK1_21 - U_10_22 * dK1_22 - U_10_23 * dK1_23) / U_10_10;
@@ -5573,15 +5591,15 @@ namespace mkpp::generated::gocart {
               double tlm_y2_9 = tlm_rhs2_9 - L_9_4 * tlm_y2_4 - L_9_5 * tlm_y2_5 - L_9_6 * tlm_y2_6 - L_9_7 * tlm_y2_7 - L_9_8 * tlm_y2_8;
               // Block 6: dK2 forward sub [NH3]
               double tlm_y2_10 = tlm_rhs2_10 - L_10_4 * tlm_y2_4 - L_10_5 * tlm_y2_5 - L_10_6 * tlm_y2_6 - L_10_7 * tlm_y2_7 - L_10_8 * tlm_y2_8 - L_10_9 * tlm_y2_9;
-              // Block 7: dK2 forward sub [SS5]
+              // Block 7: dK2 forward sub [SEAS5]
               double tlm_y2_11 = tlm_rhs2_11;
-              // Block 8: dK2 forward sub [SS4]
+              // Block 8: dK2 forward sub [SEAS4]
               double tlm_y2_12 = tlm_rhs2_12;
-              // Block 9: dK2 forward sub [SS3]
+              // Block 9: dK2 forward sub [SEAS3]
               double tlm_y2_13 = tlm_rhs2_13;
-              // Block 10: dK2 forward sub [SS2]
+              // Block 10: dK2 forward sub [SEAS2]
               double tlm_y2_14 = tlm_rhs2_14;
-              // Block 11: dK2 forward sub [SS1]
+              // Block 11: dK2 forward sub [SEAS1]
               double tlm_y2_15 = tlm_rhs2_15;
               // Block 12: dK2 forward sub [DUST5]
               double tlm_y2_16 = tlm_rhs2_16;
@@ -5613,15 +5631,15 @@ namespace mkpp::generated::gocart {
               double dK2_17 = tlm_y2_17 / U_17_17;
               // Block 12: dK2 backward sub [DUST5]
               double dK2_16 = tlm_y2_16 / U_16_16;
-              // Block 11: dK2 backward sub [SS1]
+              // Block 11: dK2 backward sub [SEAS1]
               double dK2_15 = tlm_y2_15 / U_15_15;
-              // Block 10: dK2 backward sub [SS2]
+              // Block 10: dK2 backward sub [SEAS2]
               double dK2_14 = tlm_y2_14 / U_14_14;
-              // Block 9: dK2 backward sub [SS3]
+              // Block 9: dK2 backward sub [SEAS3]
               double dK2_13 = tlm_y2_13 / U_13_13;
-              // Block 8: dK2 backward sub [SS4]
+              // Block 8: dK2 backward sub [SEAS4]
               double dK2_12 = tlm_y2_12 / U_12_12;
-              // Block 7: dK2 backward sub [SS5]
+              // Block 7: dK2 backward sub [SEAS5]
               double dK2_11 = tlm_y2_11 / U_11_11;
               // Block 6: dK2 backward sub [NH3]
               double dK2_10 = (tlm_y2_10 - U_10_11 * dK2_11 - U_10_12 * dK2_12 - U_10_13 * dK2_13 - U_10_14 * dK2_14 - U_10_15 * dK2_15 - U_10_16 * dK2_16 - U_10_17 * dK2_17 - U_10_18 * dK2_18 - U_10_19 * dK2_19 - U_10_20 * dK2_20 - U_10_21 * dK2_21 - U_10_22 * dK2_22 - U_10_23 * dK2_23) / U_10_10;
@@ -5689,15 +5707,15 @@ namespace mkpp::generated::gocart {
               double tlm_y3_9 = tlm_rhs3_9 - L_9_4 * tlm_y3_4 - L_9_5 * tlm_y3_5 - L_9_6 * tlm_y3_6 - L_9_7 * tlm_y3_7 - L_9_8 * tlm_y3_8;
               // Block 6: dK3 forward sub [NH3]
               double tlm_y3_10 = tlm_rhs3_10 - L_10_4 * tlm_y3_4 - L_10_5 * tlm_y3_5 - L_10_6 * tlm_y3_6 - L_10_7 * tlm_y3_7 - L_10_8 * tlm_y3_8 - L_10_9 * tlm_y3_9;
-              // Block 7: dK3 forward sub [SS5]
+              // Block 7: dK3 forward sub [SEAS5]
               double tlm_y3_11 = tlm_rhs3_11;
-              // Block 8: dK3 forward sub [SS4]
+              // Block 8: dK3 forward sub [SEAS4]
               double tlm_y3_12 = tlm_rhs3_12;
-              // Block 9: dK3 forward sub [SS3]
+              // Block 9: dK3 forward sub [SEAS3]
               double tlm_y3_13 = tlm_rhs3_13;
-              // Block 10: dK3 forward sub [SS2]
+              // Block 10: dK3 forward sub [SEAS2]
               double tlm_y3_14 = tlm_rhs3_14;
-              // Block 11: dK3 forward sub [SS1]
+              // Block 11: dK3 forward sub [SEAS1]
               double tlm_y3_15 = tlm_rhs3_15;
               // Block 12: dK3 forward sub [DUST5]
               double tlm_y3_16 = tlm_rhs3_16;
@@ -5729,15 +5747,15 @@ namespace mkpp::generated::gocart {
               double dK3_17 = tlm_y3_17 / U_17_17;
               // Block 12: dK3 backward sub [DUST5]
               double dK3_16 = tlm_y3_16 / U_16_16;
-              // Block 11: dK3 backward sub [SS1]
+              // Block 11: dK3 backward sub [SEAS1]
               double dK3_15 = tlm_y3_15 / U_15_15;
-              // Block 10: dK3 backward sub [SS2]
+              // Block 10: dK3 backward sub [SEAS2]
               double dK3_14 = tlm_y3_14 / U_14_14;
-              // Block 9: dK3 backward sub [SS3]
+              // Block 9: dK3 backward sub [SEAS3]
               double dK3_13 = tlm_y3_13 / U_13_13;
-              // Block 8: dK3 backward sub [SS4]
+              // Block 8: dK3 backward sub [SEAS4]
               double dK3_12 = tlm_y3_12 / U_12_12;
-              // Block 7: dK3 backward sub [SS5]
+              // Block 7: dK3 backward sub [SEAS5]
               double dK3_11 = tlm_y3_11 / U_11_11;
               // Block 6: dK3 backward sub [NH3]
               double dK3_10 = (tlm_y3_10 - U_10_11 * dK3_11 - U_10_12 * dK3_12 - U_10_13 * dK3_13 - U_10_14 * dK3_14 - U_10_15 * dK3_15 - U_10_16 * dK3_16 - U_10_17 * dK3_17 - U_10_18 * dK3_18 - U_10_19 * dK3_19 - U_10_20 * dK3_20 - U_10_21 * dK3_21 - U_10_22 * dK3_22 - U_10_23 * dK3_23) / U_10_10;

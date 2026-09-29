@@ -5,6 +5,7 @@ dictionary (Template_Context). Templates receive no Python function
 calls, only pre-computed data.
 """
 
+import math
 import re
 from typing import Any
 
@@ -101,6 +102,15 @@ def build_template_context(
 
     # --- Determine equilibrium and photolysis flags ---
     has_equilibrium = bool(mech.equilibrium_reactions)
+    # A cloud-gated kinetic reaction (activation_trigger naming
+    # meteo.cloud_liquid_water) requires the generated solver to accept cloud
+    # liquid water as a third per-cell equilibrium input
+    # (EquilibriumInput.CloudLiquidWater). It also implies the equilibrium
+    # parameter channel (temp/rh) is live, so has_equilibrium is forced True;
+    # otherwise the runtime parameters would not be threaded.
+    has_cloud_gated = bool(getattr(mech, "has_cloud_gated_reaction", False))
+    if has_cloud_gated:
+        has_equilibrium = True
     has_photolysis = False
     num_photolysis = 0
     photolysis_reactions = []
@@ -290,6 +300,24 @@ def build_template_context(
 
     tolerance_arrays = {"atol": atol_values, "rtol": rtol_values}
 
+    # --- Initial-step seed for the adaptive Rosenbrock ramp ---
+    # The generated integrate() starts its first internal substep at
+    # dt = dt_total * seed.  The committed default is the exact literal token
+    # below, so an unset seed reproduces the shipped artifact byte-for-byte.
+    # A raised seed cuts the mandatory growth substeps (cost floor) while the
+    # rejection controller preserves accuracy; it must be finite and positive
+    # or the integrator can stall, so reject anything else loudly.
+    initial_step_seed = "1.0e-6"
+    if isinstance(getattr(mech, "metadata", None), dict):
+        meta_seed = mech.metadata.get("initial_step_seed")
+        if meta_seed is not None:
+            seed_value = float(meta_seed)
+            if not math.isfinite(seed_value) or seed_value <= 0.0:
+                raise ValueError(
+                    f"initial_step_seed must be a finite positive fraction of the " f"chemistry interval, got {meta_seed!r}"
+                )
+            initial_step_seed = repr(seed_value)
+
     # --- Tableau serialization ---
     tableau_dict = {
         "name": tableau.name,
@@ -348,9 +376,11 @@ def build_template_context(
         "permutation": permutation,
         "adjoint_enabled": adjoint,
         "has_equilibrium": has_equilibrium,
+        "has_cloud_gated": has_cloud_gated,
         "has_photolysis": has_photolysis,
         "num_photolysis": num_photolysis,
         "tolerance_arrays": tolerance_arrays,
+        "initial_step_seed": initial_step_seed,
         "simd_backend": simd_backend,
     }
 

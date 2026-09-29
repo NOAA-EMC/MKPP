@@ -27,9 +27,20 @@
     blocks               - list of block dicts or None
     has_equilibrium      - bool
     tolerance_arrays     - dict with atol, rtol lists
+    initial_step_seed    - C++ literal token for the ramp seed member default
 
   Requirements: 4.1
 #}
+      /**
+       * @brief Initial-step seed for the adaptive Rosenbrock ramp.
+       *
+       * The first internal substep of every integrate() call starts at
+       * dt_total * initial_step_seed.  The compile-time value is baked as the
+       * initializer; a host may override the member before a solve (per
+       * SolverKernels instance) without regenerating this header.
+       */
+      double initial_step_seed = {{ initial_step_seed }};
+
       /**
        * @brief Performs adaptive time-stepping Rosenbrock integration over dt_total.
        *
@@ -40,10 +51,14 @@
        */
       template <class StateView>
 {% if has_equilibrium %}
-      KOKKOS_INLINE_FUNCTION void integrate(double dt_total, StateView& state, const double* jvals, const double temp, const double rh) const {
+      KOKKOS_INLINE_FUNCTION void integrate(double dt_total, StateView& state, const double* jvals, const double temp, const double rh{% if has_cloud_gated %}, const double clw{% endif %}) const {
           const double Temp = temp;
           const double RH = rh;
           (void)RH;  // Reserved for future deliquescence modeling
+{% if has_cloud_gated %}
+          const double CLW = clw;
+          (void)CLW;  // Referenced by the gated reaction's compiled chunks.
+{% endif %}
 {% else %}
       KOKKOS_INLINE_FUNCTION void integrate(double dt_total, StateView& state, const double* jvals) const {
 {% endif %}
@@ -56,9 +71,9 @@
           const double rejection_factor_decrease = 0.1;
           const double h_min = dt_total * 1.0e-15;
           double t = 0.0;
-          // Match MICM's default initial Rosenbrock step: 1e-6 of the
-          // chemistry interval, with the interval itself as h_max.
-          double dt = dt_total * 1.0e-6;
+          // First substep of the adaptive ramp; the seed member carries the
+          // compile-time default and any host-set runtime override.
+          double dt = dt_total * initial_step_seed;
           bool reject_last_dt = false;
           bool reject_more_dt = false;
 
@@ -77,7 +92,7 @@
           // units.  The solver still uses the same symbolic sparse LU plan.
           double J_values[NUM_SPECIES * NUM_SPECIES] = {};
 {% for chunk in compiled_jacobian_chunks %}
-          detail::compute_jacobian_chunk_{{ loop.index0 }}(state.data(), J_values, jvals, {% if has_equilibrium %}temp, rh{% else %}0.0, 0.0{% endif %});
+          detail::compute_jacobian_chunk_{{ loop.index0 }}(state.data(), J_values, jvals, {% if has_equilibrium %}temp, rh{% if has_cloud_gated %}, clw{% endif %}{% else %}0.0, 0.0{% endif %});
 {% endfor %}
           // Analytical Jacobian & Iteration Matrix W = inv_g_dt*I - J (sparse)
 {% for entry in jacobian_entries %}
@@ -148,7 +163,7 @@
 {% if loop.first %}
           double F_values_{{ stage }}[NUM_SPECIES];
 {% for chunk in compiled_rate_chunks %}
-          detail::compute_rates_chunk_{{ loop.index0 }}(state.data(), F_values_{{ stage }}, jvals, {% if has_equilibrium %}temp, rh{% else %}0.0, 0.0{% endif %});
+          detail::compute_rates_chunk_{{ loop.index0 }}(state.data(), F_values_{{ stage }}, jvals, {% if has_equilibrium %}temp, rh{% if has_cloud_gated %}, clw{% endif %}{% else %}0.0, 0.0{% endif %});
 {% endfor %}
 {% endif %}
 {% if permutation %}
@@ -172,7 +187,7 @@
 {% if loop.last %}
           double F_values_{{ stage }}[NUM_SPECIES];
 {% for chunk in compiled_rate_chunks %}
-          detail::compute_rates_chunk_{{ loop.index0 }}(stage_state_{{ stage }}, F_values_{{ stage }}, jvals, {% if has_equilibrium %}temp, rh{% else %}0.0, 0.0{% endif %});
+          detail::compute_rates_chunk_{{ loop.index0 }}(stage_state_{{ stage }}, F_values_{{ stage }}, jvals, {% if has_equilibrium %}temp, rh{% if has_cloud_gated %}, clw{% endif %}{% else %}0.0, 0.0{% endif %});
 {% endfor %}
 {% endif %}
 {% endfor %}

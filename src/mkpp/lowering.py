@@ -138,6 +138,32 @@ def _process_rate_vector_cse(reaction_fluxes: list[sp.Expr]) -> tuple[list[tuple
     return final_cse, final_reduced_fluxes
 
 
+def _parse_trigger_threshold(trigger, reaction_idx: int) -> float:
+    """Extract the numeric comparison value from an activation_trigger string.
+
+    The supported form is ``meteo.cloud_liquid_water > <number>``. A missing or
+    non-finite threshold is fatal: silently defaulting it would activate or
+    deactivate aqueous chemistry on the wrong cells (fail-fast, never clamp).
+    """
+    import re
+
+    match = re.search(r">\s*([-+0-9.eE]+)", str(trigger))
+    if not match:
+        raise ValueError(
+            f"HETEROGENEOUS reaction {reaction_idx} has an activation_trigger "
+            f"with no parseable '> <threshold>' comparison: {trigger!r}"
+        )
+    try:
+        value = float(match.group(1))
+    except ValueError as exc:  # pragma: no cover - guarded by regex above
+        raise ValueError(
+            f"HETEROGENEOUS reaction {reaction_idx} has a non-numeric " f"activation_trigger threshold: {trigger!r}"
+        ) from exc
+    if value != value or value in (float("inf"), float("-inf")):
+        raise ValueError(f"HETEROGENEOUS reaction {reaction_idx} has a non-finite " f"activation_trigger threshold: {trigger!r}")
+    return value
+
+
 def _evaluate_reaction_fluxes(mech: MechanismDefinition) -> dict[str, Any]:
     """
     Evaluates reaction rate expressions and builds symbolic implicit/explicit ODE vectors (f_implicit, f_explicit, f_total)
@@ -149,6 +175,11 @@ def _evaluate_reaction_fluxes(mech: MechanismDefinition) -> dict[str, Any]:
     M_density = sp.Symbol("M_density", real=True, nonnegative=True)
     v_gas = sp.Symbol("v_gas", real=True, nonnegative=True)
     S_a = sp.Symbol("S_a", real=True, nonnegative=True)
+    # Cloud liquid water: a runtime per-cell meteorological input that gates
+    # heterogeneous (aqueous) reactions via their `activation_trigger`. Kept as
+    # a C++ variable reference (never substituted) when a mechanism declares a
+    # cloud-gated reaction, exactly like Temp/RH.
+    CLW = sp.Symbol("CLW", real=True, nonnegative=True)
 
     df_dt_implicit = {s.name: sp.Integer(0) for s in mech.species}
     df_dt_explicit = {s.name: sp.Integer(0) for s in mech.species}
@@ -313,6 +344,19 @@ def _evaluate_reaction_fluxes(mech: MechanismDefinition) -> dict[str, Any]:
         for reactant, stoich in reactants_dict.items():
             if reactant in species_symbols:
                 flux *= species_symbols[reactant] ** sp.Integer(int(stoich))
+
+        # Activation trigger: gate the reaction by a smooth indicator of cloud
+        # liquid water. The algebraic sigmoid is C^inf, so the analytically
+        # differentiated Jacobian remains consistent with the gated rate — a
+        # hard discontinuity would silently mis-converge the Rosenbrock stages.
+        # Width defaults to 1% of the threshold so the indicator approximates
+        # the declared `> threshold` test while staying differentiable.
+        trigger = p.get("activation_trigger")
+        if trigger is not None and "meteo.cloud_liquid_water" in str(trigger):
+            threshold = _parse_trigger_threshold(trigger, idx)
+            width = sp.Float(float(p.get("activation_width", max(abs(threshold) * 1.0e-2, 1.0e-30))))
+            u = (CLW - threshold) / width
+            flux *= sp.Rational(1, 2) * (1 + u / sp.sqrt(1 + u**2))
 
         reaction_fluxes.append(flux)
 

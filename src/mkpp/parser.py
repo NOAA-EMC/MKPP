@@ -281,6 +281,30 @@ def parse_mechanism_micm(
             )
         host_interface = HostInterfaceSchema(arrays=arrays)
 
+    # A kinetic reaction may declare an `activation_trigger` naming a runtime
+    # meteorological quantity, e.g. "meteo.cloud_liquid_water > 1.0e-6". When
+    # present, the reaction's rate is gated by a smooth indicator of that
+    # quantity and the generated solver must accept it as an extra per-cell
+    # equilibrium input. Only cloud liquid water is currently supported; an
+    # unrecognized quantity is rejected rather than silently ignored, because a
+    # dropped trigger would run ungated chemistry (the exact failure R1 guards).
+    _TRIGGER_QUANTITIES = {"meteo.cloud_liquid_water": "cloud_liquid_water"}
+    cloud_gated = False
+    for rxn in reactions:
+        trigger = rxn.parameters.get("activation_trigger")
+        if trigger is None:
+            continue
+        quantity = str(trigger).split(">")[0].strip()
+        if quantity not in _TRIGGER_QUANTITIES:
+            raise CompilationError(
+                stage="validation",
+                message=(
+                    f"reaction declares unsupported activation_trigger '{trigger}'; "
+                    f"supported quantities: {sorted(_TRIGGER_QUANTITIES)}"
+                ),
+            )
+        cloud_gated = True
+
     return MechanismDefinition(
         name=name,
         description=data.get("description", ""),
@@ -291,6 +315,7 @@ def parse_mechanism_micm(
         host_interface=host_interface,
         equilibrium_reactions=equilibrium_reactions,
         metadata=data.get("metadata", {}),
+        has_cloud_gated_reaction=cloud_gated,
     )
 
 
@@ -389,6 +414,7 @@ def load_environment(path: str | Path) -> EnvironmentDefinition:
         solver_block = {}
     solver_atol = solver_block.get("atol")
     solver_rtol = solver_block.get("rtol")
+    solver_seed = solver_block.get("initial_step_seed")
 
     init_conc = data.get("initial_concentrations", data.get("initial_conditions", data.get("concentrations", {})))
     if not isinstance(init_conc, dict):
@@ -403,5 +429,6 @@ def load_environment(path: str | Path) -> EnvironmentDefinition:
         relative_humidity=rh,
         solver_atol=float(solver_atol) if solver_atol is not None else None,
         solver_rtol=float(solver_rtol) if solver_rtol is not None else None,
+        solver_initial_step_seed=float(solver_seed) if solver_seed is not None else None,
         initial_concentrations=normalized_init,
     )

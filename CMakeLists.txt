@@ -1,10 +1,18 @@
 cmake_minimum_required(VERSION 3.24)
 project(MKPP_Root CXX)
 
-find_package(Kokkos REQUIRED)
+# When MKPP is consumed via add_subdirectory from a parent build (e.g. CATChem), the parent has
+# already made Kokkos available: either as imported targets from find_package or as in-tree targets
+# from FetchContent. Re-running find_package(Kokkos) in that situation is not a no-op -- it searches
+# the config package on disk, which may resolve to a DIFFERENT Kokkos installation than the parent
+# is building against, and re-including its exported targets collides with the parent's existing
+# Kokkos:: targets. Adopt the parent's Kokkos when its targets already exist; find it ourselves only
+# for a standalone MKPP build.
+if(NOT TARGET Kokkos::kokkos)
+  find_package(Kokkos REQUIRED)
+endif()
 
-option(MKPP_ENABLE_KOKKOS_KERNELS
-       "Enable KokkosKernels integration for batched computations" OFF)
+option(MKPP_ENABLE_KOKKOS_KERNELS "Enable KokkosKernels integration for batched computations" OFF)
 
 if(MKPP_ENABLE_KOKKOS_KERNELS)
   find_package(KokkosKernels 5.0 QUIET)
@@ -47,14 +55,11 @@ FetchContent_Declare(
   GIT_TAG v1.14.0)
 
 option(MKPP_ENABLE_MICM_COMPARE
-       "Fetch NCAR/micm and build direct C++ side-by-side comparison benchmark"
-       OFF)
+       "Fetch NCAR/micm and build direct C++ side-by-side comparison benchmark" OFF)
 
-option(MKPP_ENABLE_ADJOINT
-       "Enable adjoint and tangent-linear APIs in generated MKPP headers" OFF)
+option(MKPP_ENABLE_ADJOINT "Enable adjoint and tangent-linear APIs in generated MKPP headers" OFF)
 
-option(MKPP_ENABLE_SOLVER_COMPARISON
-       "Build governed MICM, KPP, and MKPP comparison runners" OFF)
+option(MKPP_ENABLE_SOLVER_COMPARISON "Build governed MICM, KPP, and MKPP comparison runners" OFF)
 
 if(MKPP_ENABLE_MICM_COMPARE OR MKPP_ENABLE_SOLVER_COMPARISON)
   set(CMAKE_CXX_STANDARD

@@ -37,7 +37,7 @@
       KOKKOS_INLINE_FUNCTION int integrate_fwd_checkpoint(
 {% if has_equilibrium %}
           double dt_total, StateView& state, const double* jvals,
-          CheckpointBuffer& chk, const double temp, const double rh) const
+          CheckpointBuffer& chk, const double temp, const double rh{% if has_cloud_gated %}, const double clw{% endif %}) const
 {% else %}
           double dt_total, StateView& state, const double* jvals,
           CheckpointBuffer& chk) const
@@ -48,6 +48,9 @@
           const double Temp = temp;
           const double RH = rh;
           (void)RH;  // Reserved for future deliquescence modeling
+{% if has_cloud_gated %}
+          const double CLW = clw;
+{% endif %}
 {% endif %}
           // {{ tableau.name }} coefficients ({{ tableau.stages }}-stage, order {{ tableau.ELO | int }})
           const double g = {{ "%.17g" | format(tableau.Gamma[0]) }};
