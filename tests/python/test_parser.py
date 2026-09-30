@@ -1,3 +1,4 @@
+import copy
 import json
 import time
 
@@ -32,6 +33,143 @@ def test_parse_complex_troe_parameters():
     assert "k0" in mech.reactions[0].parameters
     assert mech.reactions[0].parameters["k0"]["A"] == 1.0
     assert mech.reactions[0].parameters["kinf"]["C"] == 6.0
+
+
+def test_rate_units_default_to_kinetic_without_mutating_input():
+    data = {
+        "species": [{"name": "A"}, {"name": "B"}],
+        "reactions": [
+            {
+                "type": "ARRHENIUS",
+                "reactants": {"A": 1},
+                "products": {"B": 1},
+                "A": 4.0e-12,
+            }
+        ],
+    }
+    original = copy.deepcopy(data)
+
+    mechanism = parse_mechanism_micm("kinetic_default", data)
+
+    assert mechanism.source_rate_units == "kinetic"
+    assert mechanism.reactions[0].parameters["A"] == 4.0e-12
+    assert data == original
+
+
+def test_explicit_kinetic_rate_units_are_normalized_without_input_mutation():
+    data = {
+        "metadata": {"rate_units": "KiNeTiC"},
+        "species": [{"name": "A"}, {"name": "B"}],
+        "reactions": [
+            {
+                "type": "ARRHENIUS",
+                "reactants": {"A": 1},
+                "products": {"B": 1},
+                "A": 4.0e-12,
+            }
+        ],
+    }
+    original = copy.deepcopy(data)
+
+    mechanism = parse_mechanism_micm("explicit_kinetic", data)
+
+    assert mechanism.source_rate_units == "kinetic"
+    assert mechanism.metadata == data["metadata"]
+    assert mechanism.reactions[0].parameters["A"] == 4.0e-12
+    assert data == original
+
+
+@pytest.mark.parametrize("rate_units", ["molar", "", None])
+def test_invalid_rate_units_name_the_value_and_accepted_choices(rate_units):
+    data = {
+        "metadata": {"rate_units": rate_units},
+        "species": [{"name": "A"}],
+        "reactions": [],
+    }
+
+    with pytest.raises(CompilationError) as exc_info:
+        parse_mechanism_micm("invalid_units", data)
+
+    assert exc_info.value.stage == "parsing"
+    assert "Invalid metadata.rate_units" in exc_info.value.message
+    assert "accepted values are 'kinetic' and 'SI'" in exc_info.value.message
+
+
+@pytest.mark.parametrize(
+    ("reaction", "message"),
+    [
+        ({"type": "TUNNELING", "reactants": {"A": 1}, "products": {"B": 1}, "A": 2.0}, "TUNNELING"),
+        (
+            {"type": "CUSTOM_RATE", "reactants": {"A": 1}, "products": {"B": 1}, "A": 2.0},
+            "CUSTOM_RATE",
+        ),
+        (
+            {"type": "ARRHENIUS", "reactants": {"A": 1}, "products": {"B": 1}, "A": "A_runtime"},
+            "coefficient 'A' must be a finite numeric value",
+        ),
+        (
+            {"type": "ARRHENIUS", "reactants": {"A": 1}, "products": {"B": 1}, "A": float("nan")},
+            "coefficient 'A' must be a finite numeric value",
+        ),
+        (
+            {"type": "ARRHENIUS", "reactants": {}, "products": {"B": 1}, "A": 1.0e308},
+            "outside the convertible numeric range",
+        ),
+        (
+            {
+                "type": "TROE",
+                "reactants": {"A": 1},
+                "products": {"B": 1},
+                "k0": [],
+                "kinf": {"A": 1.0},
+            },
+            "coefficient group 'k0' must be a dictionary",
+        ),
+        (
+            {"type": "ARRHENIUS", "reactants": {"A": 1.5}, "products": {"B": 1}, "A": 2.0},
+            "does not support reactant exponent 1.5",
+        ),
+        (
+            {"type": "ARRHENIUS", "reactants": {"A": -1}, "products": {"B": 1}, "A": 2.0},
+            "does not support reactant exponent -1.0",
+        ),
+    ],
+)
+def test_unsafe_si_reactions_fail_with_reaction_context(reaction, message):
+    data = {
+        "metadata": {"rate_units": "SI"},
+        "species": [{"name": "A"}, {"name": "B"}],
+        "reactions": [reaction],
+    }
+
+    with pytest.raises(CompilationError, match=message) as exc_info:
+        parse_mechanism_micm("unsafe_si", data)
+
+    assert exc_info.value.stage == "validation"
+    assert exc_info.value.reaction_index == 0
+
+
+def test_unsafe_later_reaction_does_not_mutate_earlier_si_coefficients():
+    data = {
+        "metadata": {"rate_units": "SI"},
+        "species": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+        "reactions": [
+            {
+                "type": "ARRHENIUS",
+                "reactants": {"A": 1, "B": 1},
+                "products": {"C": 1},
+                "A": 2.0,
+            },
+            {"type": "CUSTOM_RATE", "reactants": {"A": 1}, "products": {"B": 1}, "A": 1.0},
+        ],
+    }
+    original = copy.deepcopy(data)
+
+    with pytest.raises(CompilationError) as exc_info:
+        parse_mechanism_micm("mixed_si", data)
+
+    assert exc_info.value.reaction_index == 1
+    assert data == original
 
 
 def test_openatmos_background_species_are_not_implicitly_fixed():
