@@ -1,4 +1,6 @@
+import copy
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +75,129 @@ def _normalize_species_dict(d: Any) -> dict[str, float]:
     return res
 
 
+def _normalize_si_rate_coefficients(reactions: list[ReactionDefinition]) -> list[ReactionDefinition]:
+    """Convert supported SI rate coefficients to the kinetic concentration basis.
+
+    Parameters
+    ----------
+    reactions : list[ReactionDefinition]
+        Parsed reaction definitions containing SI-source coefficients.
+
+    Returns
+    -------
+    list[ReactionDefinition]
+        A deep-copied reaction list with supported coefficients converted.
+
+    Raises
+    ------
+    CompilationError
+        If any coefficient family, coefficient value, or reactant order cannot
+        be converted safely.
+    """
+    molecules_per_mol_m3 = 6.02214076e17
+    runtime_rate_types = {"PHOTOLYSIS", "PHASE_CHANGE", "USER_DEFINED", "SURFACE", "HETEROGENEOUS"}
+    conversions: list[tuple[int, tuple[str, ...], float]] = []
+
+    for reaction_index, reaction in enumerate(reactions):
+        reaction_type = reaction.reaction_type.upper()
+        if reaction_type in runtime_rate_types:
+            continue
+
+        reactant_order = 0
+        for species_name, exponent in reaction.reactants.items():
+            if not math.isfinite(exponent) or exponent < 0 or not exponent.is_integer():
+                raise CompilationError(
+                    stage="validation",
+                    message=(
+                        f"SI rate conversion does not support reactant exponent {exponent!r} "
+                        f"for species '{species_name}' in {reaction_type}"
+                    ),
+                    reaction_index=reaction_index,
+                )
+            reactant_order += int(exponent)
+
+        coefficient_paths: list[tuple[tuple[str, ...], int]] = []
+        parameters = reaction.parameters
+        if reaction_type == "ARRHENIUS":
+            if "A" not in parameters:
+                raise CompilationError(
+                    stage="validation",
+                    message="SI ARRHENIUS reaction is missing coefficient 'A'",
+                    reaction_index=reaction_index,
+                )
+            coefficient_paths.append((("A",), reactant_order))
+        elif reaction_type in {"TROE", "FALLOFF"}:
+            for key in ("k0", "kinf"):
+                if key in parameters and not isinstance(parameters[key], dict):
+                    raise CompilationError(
+                        stage="validation",
+                        message=f"SI {reaction_type} coefficient group '{key}' must be a dictionary",
+                        reaction_index=reaction_index,
+                    )
+            for key, order in (("k0", reactant_order + 1), ("kinf", reactant_order)):
+                group = parameters.get(key)
+                if isinstance(group, dict):
+                    if "A" in group:
+                        coefficient_paths.append(((key, "A"), order))
+                elif f"{key}_A" in parameters:
+                    coefficient_paths.append(((f"{key}_A",), order))
+        elif reaction_type == "EP2":
+            for key in ("A0", "A2"):
+                if key in parameters:
+                    coefficient_paths.append(((key,), reactant_order))
+            if "A3" in parameters:
+                coefficient_paths.append((("A3",), reactant_order + 1))
+        elif reaction_type == "EP3":
+            if "A1" in parameters:
+                coefficient_paths.append((("A1",), reactant_order))
+            if "A2" in parameters:
+                coefficient_paths.append((("A2",), reactant_order + 1))
+        else:
+            raise CompilationError(
+                stage="validation",
+                message=f"SI rate conversion is unsupported for reaction type '{reaction_type}'",
+                reaction_index=reaction_index,
+            )
+
+        for path, effective_order in coefficient_paths:
+            value: Any = parameters
+            for key in path:
+                value = value[key]
+            coefficient_name = ".".join(path)
+            if isinstance(value, bool):
+                numeric_value = math.nan
+            else:
+                try:
+                    numeric_value = float(value)
+                except (TypeError, ValueError):
+                    numeric_value = math.nan
+            if not math.isfinite(numeric_value):
+                raise CompilationError(
+                    stage="validation",
+                    message=(
+                        f"SI {reaction_type} coefficient '{coefficient_name}' must be a finite numeric value; " f"got {value!r}"
+                    ),
+                    reaction_index=reaction_index,
+                )
+            conversion_factor = molecules_per_mol_m3 ** (1 - effective_order)
+            converted_value = numeric_value * conversion_factor
+            if not math.isfinite(converted_value) or (numeric_value != 0.0 and converted_value == 0.0):
+                raise CompilationError(
+                    stage="validation",
+                    message=f"SI {reaction_type} coefficient '{coefficient_name}' is outside the convertible numeric range",
+                    reaction_index=reaction_index,
+                )
+            conversions.append((reaction_index, path, converted_value))
+
+    normalized_reactions = copy.deepcopy(reactions)
+    for reaction_index, path, converted_value in conversions:
+        parameters = normalized_reactions[reaction_index].parameters
+        for key in path[:-1]:
+            parameters = parameters[key]
+        parameters[path[-1]] = converted_value
+    return normalized_reactions
+
+
 def parse_mechanism_micm(
     name: str, data: dict[str, Any], *, convert_openatmos_activation_energy: bool = False
 ) -> MechanismDefinition:
@@ -82,6 +207,19 @@ def parse_mechanism_micm(
             stage="parsing",
             message="OpenAtmos v1 data must define at least one species",
         )
+
+    metadata = data.get("metadata", {})
+    if not isinstance(metadata, dict):
+        raise CompilationError(stage="parsing", message="Mechanism metadata must be a dictionary")
+    raw_rate_units = metadata.get("rate_units", "kinetic")
+    source_rate_units = str(raw_rate_units).strip().lower()
+    if source_rate_units not in {"kinetic", "si"}:
+        raise CompilationError(
+            stage="parsing",
+            message=f"Invalid metadata.rate_units '{raw_rate_units}'; accepted values are 'kinetic' and 'SI'",
+        )
+    if source_rate_units == "si":
+        source_rate_units = "SI"
 
     species = []
     for s in data.get("species", []):
@@ -242,6 +380,9 @@ def parse_mechanism_micm(
             )
         )
 
+    if source_rate_units == "SI":
+        reactions = _normalize_si_rate_coefficients(reactions)
+
     # Detect PHASE_CHANGE / EQUILIBRIUM conflicts: collect species from each
     phase_change_species: set[str] = set()
     for rxn in reactions:
@@ -314,7 +455,8 @@ def parse_mechanism_micm(
         reactions=reactions,
         host_interface=host_interface,
         equilibrium_reactions=equilibrium_reactions,
-        metadata=data.get("metadata", {}),
+        metadata=metadata,
+        source_rate_units=source_rate_units,
         has_cloud_gated_reaction=cloud_gated,
     )
 

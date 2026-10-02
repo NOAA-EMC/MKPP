@@ -1,0 +1,48 @@
+{
+  "mechanism": "chapman",
+  "aerosol_representation": "bulk",
+  "simd_backend": "native",
+  "checksum": "194557e31d7d5b9c7c91a0c7dde8ea18edbfd464d7e91aea114be9228b227d68",
+  "artifacts": [
+    {
+      "kind": "header",
+      "file": "chapman.hpp"
+    },
+    {
+      "kind": "compiled_kernel_source",
+      "file": "chapman/rates.cpp"
+    },
+    {
+      "kind": "compiled_kernel_source",
+      "file": "chapman/jacobian.cpp"
+    },
+    {
+      "kind": "compiled_kernel_source",
+      "file": "chapman/solve.cpp"
+    },
+    {
+      "kind": "compiled_kernel_source",
+      "file": "chapman/supernodal_factorize.cpp"
+    },
+    {
+      "kind": "compiled_kernel_source",
+      "file": "chapman/supernodal_solve.cpp"
+    },
+    {
+      "kind": "adjoint_tlm_record",
+      "differentiable": true
+    }
+  ],
+  "solver_partition": {
+    "sza_sorted": true,
+    "micro_blocks": {
+      "implicit": 4,
+      "explicit": 0
+    },
+    "scc_count": 1
+  },
+  "factorization_plan": {
+    "json": "chapman/factorization_plan.json",
+    "markdown": "chapman/factorization_plan.md"
+  }
+}
