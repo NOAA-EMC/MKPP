@@ -1,0 +1,10 @@
+{
+  "mechanism": "chapman",
+  "species_count": 4,
+  "operation_count": 13,
+  "fill_in_count": 0,
+  "elimination_order": [3, 2, 0, 1],
+  "blocks": [
+    {"ordinal": 0, "first_operation": 0, "operation_count": 13, "dependencies": []}
+  ]
+}
