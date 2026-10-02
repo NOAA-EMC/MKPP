@@ -1,5 +1,15 @@
 #pragma once
 #include <Kokkos_Core.hpp>
+// The expression-dense rate/Jacobian chunks and the sparse LU plan are emitted
+// as KOKKOS_INLINE_FUNCTION definitions in per-kernel implementation fragments.
+// Including them here means a device instantiation of SolverKernels resolves the
+// entire call chain to inline device-callable bodies; the compiled translation
+// units include the same fragments, so host and device share one source of truth.
+#include "chapman/rates.hpp"
+#include "chapman/jacobian.hpp"
+#include "chapman/supernodal_factorize.hpp"
+#include "chapman/supernodal_solve.hpp"
+#include "chapman/solve.hpp"
 // Generated solver for chapman
 // SZA Workload Sorted: true
 // Hysteresis/Spline Continuous Transition: true
@@ -29,20 +39,19 @@ namespace mkpp::generated::chapman {
 #endif
 
   // The expression-dense RHS and Jacobian are compiled in bounded units.
-  // This declaration-only boundary keeps host-model translation units small.
-  namespace detail {
-  void compute_rates_chunk_0(const double* state, double* rates,
-                                              const double* jvals, double temp, double rh);
-  void compute_jacobian_chunk_0(const double* state, double* jacobian,
-                                                 const double* jvals, double temp, double rh);
-  void factorize_lu_chunk_0(const double* w, double* lu);
-  void solve_lu(const double* lu, const double* rhs, double* solution);
-  void factorize_plan(const double* w, double* lu);
-  void solve_plan(const double* lu, const double* rhs, double* solution);
-  }  // namespace detail
+  // Every detail:: helper is an inline device-callable definition supplied by
+  // the implementation fragments included at the top of this header, so a
+  // device instantiation of SolverKernels resolves the full call chain without
+  // any host-only out-of-line symbol.
 
   template<typename DeviceType>
   struct SolverKernels {
+      using memory_space = typename DeviceType::memory_space;
+#ifdef MKPP_ENABLE_ADJOINT
+      // Expose the checkpoint buffer through the kernel type so generic
+      // device-path callers can name it without the mechanism namespace.
+      using CheckpointBuffer = ::mkpp::generated::chapman::CheckpointBuffer;
+#endif
       /**
        * @brief Evaluates the rate-of-change vector F(i) = dC_i / dt.
        *
@@ -53,7 +62,8 @@ namespace mkpp::generated::chapman {
        * @param jvals Array of photolysis rate constants [NUM_PHOTOLYSIS].
        */
       template <class StateView, class RateView>
-      KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, const double* jvals) const {
+      KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, Kokkos::View<const double*, memory_space> jvals_view) const {
+          const double* jvals = jvals_view.data();
           detail::compute_rates_chunk_0(state.data(), F_block.data(), jvals, 0.0, 0.0);
       }
 
@@ -67,13 +77,15 @@ namespace mkpp::generated::chapman {
        * @param jvals Array of photolysis rate constants [NUM_PHOTOLYSIS].
        */
       template <class StateView, class JacView>
-      KOKKOS_INLINE_FUNCTION void compute_jacobian(const StateView& state, JacView& J_block, const double* jvals) const {
+      KOKKOS_INLINE_FUNCTION void compute_jacobian(const StateView& state, JacView& J_block, Kokkos::View<const double*, memory_space> jvals_view) const {
+          const double* jvals = jvals_view.data();
           detail::compute_jacobian_chunk_0(state.data(), J_block.data(), jvals, 0.0, 0.0);
       }
 
 #ifdef MKPP_ENABLE_ADJOINT
       template <class StateView, class JacView>
-      KOKKOS_INLINE_FUNCTION void compute_adjoint(const StateView& state, JacView& J_adj_block, const double* jvals) const {
+      KOKKOS_INLINE_FUNCTION void compute_adjoint(const StateView& state, JacView& J_adj_block, Kokkos::View<const double*, memory_space> jvals_view) const {
+          const double* jvals = jvals_view.data();
           // --- Sparse Analytical Adjoint Jacobian Entries J_adj_block(i, j) = J^T(i, j) ---
           // J^T(O, O): d(d[O]/dt) / d[O]
           J_adj_block(0, 0) = -6e-34*state(3)*state(1) - 8e-12*state(2);
@@ -104,7 +116,8 @@ namespace mkpp::generated::chapman {
 
 #ifdef MKPP_ENABLE_ADJOINT
       template <class StateView, class DeltaView, class RateView>
-      KOKKOS_INLINE_FUNCTION void compute_tlm(const StateView& state, const DeltaView& delta_C, RateView& dF_block, const double* jvals) const {
+      KOKKOS_INLINE_FUNCTION void compute_tlm(const StateView& state, const DeltaView& delta_C, RateView& dF_block, Kokkos::View<const double*, memory_space> jvals_view) const {
+          const double* jvals = jvals_view.data();
           dF_block(0) = 0.0;
           dF_block(0) += (-6e-34*state(3)*state(1) - 8e-12*state(2)) * delta_C(0);
           dF_block(0) += (-6e-34*state(3)*state(0) + 2.0*jvals[0]) * delta_C(1);
@@ -161,7 +174,8 @@ namespace mkpp::generated::chapman {
        * @param jvals Array of photolysis rate constants [NUM_PHOTOLYSIS].
        */
       template <class StateView>
-      KOKKOS_INLINE_FUNCTION void integrate(double dt_total, StateView& state, const double* jvals) const {
+      KOKKOS_INLINE_FUNCTION void integrate(double dt_total, StateView& state, Kokkos::View<const double*, memory_space> jvals_view) const {
+          const double* jvals = jvals_view.data();
           const int NUM_SPECIES = 4;
           // ROS-3 coefficients (3-stage, order 3)
           const double g = 0.435866521508459;
@@ -389,8 +403,9 @@ namespace mkpp::generated::chapman {
 #ifdef MKPP_ENABLE_REDUCTION
       template <class StateView>
       KOKKOS_INLINE_FUNCTION void integrate_with_reduction(
-          double dt_total, StateView& state, const double* jvals, double importance_threshold) const
+          double dt_total, StateView& state, Kokkos::View<const double*, memory_space> jvals_view, double importance_threshold) const
       {
+          const double* jvals = jvals_view.data();
           const int NUM_SPECIES = 4;
           // ROS-3 coefficients (3-stage, order 3)
           const double g = 0.435866521508459;
@@ -606,9 +621,10 @@ namespace mkpp::generated::chapman {
       // Returns number of accepted steps, or -1 if MAX_STEPS exceeded.
       template <class StateView>
       KOKKOS_INLINE_FUNCTION int integrate_fwd_checkpoint(
-          double dt_total, StateView& state, const double* jvals,
+          double dt_total, StateView& state, Kokkos::View<const double*, memory_space> jvals_view,
           CheckpointBuffer& chk) const
       {
+          const double* jvals = jvals_view.data();
           const int NUM_SPECIES = 4;
           // ROS-3 coefficients (3-stage, order 3)
           const double g = 0.435866521508459;
@@ -838,9 +854,10 @@ namespace mkpp::generated::chapman {
       template <class StateView, class AdjView>
       KOKKOS_INLINE_FUNCTION void integrate_adj(
           double dt_total, const StateView& state_final,
-          AdjView& lambda, const double* jvals,
+          AdjView& lambda, Kokkos::View<const double*, memory_space> jvals_view,
           const CheckpointBuffer& chk) const
       {
+          const double* jvals = jvals_view.data();
           const double g = 0.435866521508459;
 
           // --- Discrete Adjoint: backward integration over checkpointed steps ---
@@ -854,7 +871,7 @@ namespace mkpp::generated::chapman {
               const double S_2 = chk.state[step][2];
               const double S_3 = chk.state[step][3];
 
-              // Recompute Jacobian at checkpointed state (recompute-J strategy, D1)
+              // Recompute Jacobian at checkpointed state (recompute-J strategy)
               double J_1_0 = 6e-34*S_2*S_3;
               double J_1_1 = -8e-12*S_2 - 1.0*jvals[1];
               double J_1_2 = 6e-34*S_0*S_3 - 8e-12*S_1;
@@ -987,9 +1004,10 @@ namespace mkpp::generated::chapman {
       template <class StateView, class PertView>
       KOKKOS_INLINE_FUNCTION void integrate_tlm(
           double dt_total, const StateView& state_0,
-          PertView& delta_C, const double* jvals,
+          PertView& delta_C, Kokkos::View<const double*, memory_space> jvals_view,
           const CheckpointBuffer& chk) const
       {
+          const double* jvals = jvals_view.data();
           const double g = 0.435866521508459;
 
           // Local aliases for delta_C (TLM stages use dC_k naming)
@@ -1010,7 +1028,7 @@ namespace mkpp::generated::chapman {
               const double S_2 = chk.state[step][2];
               const double S_3 = chk.state[step][3];
 
-              // Recompute Jacobian at checkpointed state (recompute-J strategy, D1)
+              // Recompute Jacobian at checkpointed state (recompute-J strategy)
               double J_1_0 = 6e-34*S_2*S_3;
               double J_1_1 = -8e-12*S_2 - 1.0*jvals[1];
               double J_1_2 = 6e-34*S_0*S_3 - 8e-12*S_1;

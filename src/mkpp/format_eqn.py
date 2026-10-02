@@ -22,6 +22,34 @@ def _fold_numeric_falloff_powers(code: str) -> str:
     return pattern.sub(replace, code)
 
 
+# SymPy's C printer emits unqualified math (pow/log/exp/sqrt) and C library
+# macros (M_LN10, M_PI, ...).  Device compilers do not reliably resolve those
+# spellings across CUDA/HIP/SYCL/OpenMP-offload, and the hand-written solver
+# code already uses Kokkos:: math.  Qualify the generated expressions to the
+# same dialect so the whole generated path is device-callable and consistent.
+# The lookbehind keeps this idempotent: it never re-qualifies Kokkos:: or std::.
+_KOKKOS_MATH_FUNCS = re.compile(r"(?<![:.\w])(pow|log10|log2|log|exp|sqrt|fabs)\(")
+_KOKKOS_MATH_CONSTANTS = {
+    "M_LN10": "Kokkos::log(10.0)",
+    "M_LN2": "Kokkos::log(2.0)",
+    "M_PI": "Kokkos::numbers::pi",
+    "M_E": "Kokkos::numbers::e",
+}
+_KOKKOS_MATH_CONSTANT_RE = re.compile(r"\b(" + "|".join(sorted(_KOKKOS_MATH_CONSTANTS, key=len, reverse=True)) + r")\b")
+
+
+def _kokkos_math(code: str) -> str:
+    """Rewrite bare C math functions and macros into Kokkos:: spellings.
+
+    Runs after strength reduction so integer powers stay as multiplies and only
+    the transcendental calls (fractional ``pow``, ``log``, ``exp``, ``sqrt``,
+    ``fabs``) and the C math constants are qualified.  Idempotent and safe on
+    already-qualified ``Kokkos::``/``std::`` names and non-math tokens.
+    """
+    code = _KOKKOS_MATH_CONSTANT_RE.sub(lambda m: _KOKKOS_MATH_CONSTANTS[m.group(1)], code)
+    return _KOKKOS_MATH_FUNCS.sub(r"Kokkos::\1(", code)
+
+
 def _clean_float_literals(code: str) -> str:
     """Clean up verbose floating point literals (e.g. 7.9999999999999998e-12 -> 8e-12)."""
     pattern = re.compile(r"\b(?<![a-zA-Z_])\d+\.\d+(?:[eE][-+]?\d+)?\b")
@@ -161,5 +189,6 @@ def format_eqn(
 
     s = _strength_reduce_squares(s)
     s = _clean_float_literals(s)
+    s = _kokkos_math(s)
 
     return s

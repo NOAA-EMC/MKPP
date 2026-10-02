@@ -1,0 +1,36 @@
+{#
+  Device-callable implementation fragment: rate-of-change chunks.
+
+  Emits every compiled rate chunk as a KOKKOS_INLINE_FUNCTION definition inside
+  the mechanism's detail namespace. The public header and the thin rates.cpp
+  translation unit both include this single source of truth, so a device
+  instantiation of SolverKernels sees inline bodies (no host-only out-of-line
+  symbol) while the compiled static library keeps providing the same algebra.
+
+  Context: mechanism_name, compiled_rate_chunks, has_equilibrium, has_cloud_gated
+#}
+#pragma once
+#include <Kokkos_Core.hpp>
+namespace mkpp::generated::{{ mechanism_name }}::detail {
+{% for expressions in compiled_rate_chunks %}
+KOKKOS_INLINE_FUNCTION void compute_rates_chunk_{{ loop.index0 }}(
+    const double* state, double* rates,
+    const double* jvals, double temp, double rh{% if has_cloud_gated %}, double clw{% endif %}) {
+{% if has_equilibrium %}
+  const double Temp = temp;
+  const double RH = rh;
+  (void)RH;
+{% if has_cloud_gated %}
+  const double CLW = clw;
+  (void)CLW;  // Referenced only by the gated reaction's chunk.
+{% endif %}
+{% else %}
+  (void)temp;
+  (void)rh;
+{% endif %}
+{% for expression in expressions %}
+  rates[{{ expression.index }}] = {{ expression.expr }};
+{% endfor %}
+}
+{% endfor %}
+}  // namespace mkpp::generated::{{ mechanism_name }}::detail

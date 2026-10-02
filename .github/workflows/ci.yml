@@ -205,3 +205,32 @@ jobs:
 
       - name: Run Python AOT Tests
         run: pytest tests/python/ -ra -q --strict-markers
+
+  device-gate:
+    name: 6. Device Compile + Parity (optional)
+    # Optional and hardware-gated: only runs on a self-hosted runner with an
+    # accelerator. On ordinary host-only runners the device compile gate is not
+    # built and the runtime parity test reports device-unverified, so this job
+    # is allowed to be non-authoritative and never blocks a merge. The five
+    # validation states (host-compiled, host-executed, device-compiled,
+    # device-executed, device-unverified) are emitted by the test binaries.
+    needs: test-gates
+    if: ${{ vars.MKPP_DEVICE_RUNNER == 'true' }}
+    runs-on: [self-hosted, gpu]
+    continue-on-error: true
+    container:
+      image: ghcr.io/bbakernoaa/mkpp-ci-env:latest
+      options: --gpus all
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure Device Preset
+        run: cmake --preset device -DKokkos_ROOT=/opt/kokkos
+
+      - name: Build Device Gate
+        run: cmake --build --preset device
+
+      - name: Run Device Compile Gate + Runtime Parity
+        run: ctest --test-dir build-device -R 'DeviceCompileGate|DeviceRuntimeParity' --output-on-failure

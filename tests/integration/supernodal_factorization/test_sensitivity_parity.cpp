@@ -11,7 +11,11 @@ int main() {
   auto hstate = Kokkos::create_mirror_view(state), hdelta = Kokkos::create_mirror_view(delta);
   for (int i = 0; i < 4; ++i) { hstate(i) = 1.0 + i; hdelta(i) = 0.25 * (i + 1); }
   Kokkos::deep_copy(state, hstate); Kokkos::deep_copy(delta, hdelta);
-  const double jvals[2] = {2.0e-5, 1.0e-3};
+  Kokkos::View<double*> jvals_host("jvals", 2);
+  auto hjv = Kokkos::create_mirror_view(jvals_host);
+  hjv(0) = 2.0e-5; hjv(1) = 1.0e-3;
+  Kokkos::deep_copy(jvals_host, hjv);
+  Kokkos::View<const double*, Kokkos::DefaultExecutionSpace::memory_space> jvals(jvals_host);
   Solver solver;
   solver.compute_jacobian(state, jacobian, jvals);
   solver.compute_adjoint(state, adjoint, jvals);

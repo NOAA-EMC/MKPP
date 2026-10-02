@@ -14,14 +14,59 @@ enum CellErrorCode : int {
     ERR_NUMERICAL_FAILURE = 4
 };
 
+/// @brief Photolysis rate array bound in the memory space of the state it drives.
+///
+/// A raw host pointer cannot be dereferenced inside a device functor, so runtime
+/// array inputs travel as a Kokkos view in the consuming kernel's memory space.
+/// An empty view means "no photolysis supplied" and is normalised to a shared
+/// zero-filled array at the host launch boundary (never inside a kernel).
+template <typename MemorySpace>
+using JvalsView = Kokkos::View<const double*, MemorySpace>;
+
+namespace detail {
+
+/// @brief Cached zero-filled photolysis array used when a caller supplies none.
+/// @note Materialised once per memory space at the host launch boundary; device
+///       code never allocates. The zeros stand in for the previous static array.
+///       The holder is intentionally heap-allocated and never destroyed: a
+///       function-local static Kokkos view would deallocate after
+///       Kokkos::finalize() during program exit, which Kokkos treats as an
+///       error. The process reclaims the single bounded buffer at exit.
+template <typename MemorySpace>
+inline JvalsView<MemorySpace> zero_jvals(std::size_t extent) {
+    using MutableView = Kokkos::View<double*, MemorySpace>;
+    static MutableView& cached = *new MutableView();
+    if (cached.extent(0) < extent) {
+        MutableView fresh("MKPP_ZeroJvals", extent);
+        Kokkos::deep_copy(fresh, 0.0);
+        cached = fresh;
+    }
+    return JvalsView<MemorySpace>(cached.data(), cached.extent(0));
+}
+
+/// @brief Replace an empty photolysis view with the shared zero-filled array.
+template <typename MemorySpace>
+inline JvalsView<MemorySpace> resolve_jvals(const JvalsView<MemorySpace>& jvals,
+                                            std::size_t extent) {
+    if (jvals.data() == nullptr || jvals.extent(0) == 0) {
+        return zero_jvals<MemorySpace>(extent);
+    }
+    return jvals;
+}
+
+}  // namespace detail
+
 /// @brief Runtime execution parameters for host integration dispatch.
 struct HostExecutionParams {
-    double dt{60.0};              ///< Integration timestep size in seconds
-    const double* jvals{nullptr}; ///< Pointer to Cloud-J photolysis rate array
-    double temp{288.15};          ///< Temperature in Kelvin (used for mechanisms like GOCART)
-    double rh{0.5};               ///< Relative humidity fraction (used for mechanisms like GOCART)
-    double clw{0.0};              ///< Cloud liquid water fraction (used by cloud-gated mechanisms)
-    int steps{1};                 ///< Number of integration timesteps
+    using memory_space = Kokkos::DefaultExecutionSpace::memory_space;
+
+    double dt{60.0};                        ///< Integration timestep size in seconds
+    JvalsView<memory_space> jvals{};        ///< Cloud-J photolysis rates in the active memory space
+    double temp{288.15};                    ///< Temperature in Kelvin (used for mechanisms like GOCART)
+    double rh{0.5};                         ///< Relative humidity fraction (used for mechanisms like GOCART)
+    double clw{0.0};                        ///< Cloud liquid water fraction (used by cloud-gated mechanisms)
+    int steps{1};                           ///< Number of integration timesteps
+    std::size_t jvals_extent{512};          ///< Fallback photolysis array size when none is supplied
 };
 
 /// @brief Helper trait function invoking solver integration with matching argument signature.
@@ -29,15 +74,12 @@ template <typename SolverKernelsType, typename SubStateView>
 KOKKOS_INLINE_FUNCTION void integrate_cell(SolverKernelsType& solver,
                                            const HostExecutionParams& params,
                                            SubStateView sub_state) {
-    static const double default_jvals[512] = {0.0};
-    const double* jvals_ptr = params.jvals ? params.jvals : default_jvals;
-
-    if constexpr (requires { solver.integrate(params.dt, sub_state, jvals_ptr, params.temp, params.rh, params.clw); }) {
-        solver.integrate(params.dt, sub_state, jvals_ptr, params.temp, params.rh, params.clw);
-    } else if constexpr (requires { solver.integrate(params.dt, sub_state, jvals_ptr, params.temp, params.rh); }) {
-        solver.integrate(params.dt, sub_state, jvals_ptr, params.temp, params.rh);
+    if constexpr (requires { solver.integrate(params.dt, sub_state, params.jvals, params.temp, params.rh, params.clw); }) {
+        solver.integrate(params.dt, sub_state, params.jvals, params.temp, params.rh, params.clw);
+    } else if constexpr (requires { solver.integrate(params.dt, sub_state, params.jvals, params.temp, params.rh); }) {
+        solver.integrate(params.dt, sub_state, params.jvals, params.temp, params.rh);
     } else {
-        solver.integrate(params.dt, sub_state, jvals_ptr);
+        solver.integrate(params.dt, sub_state, params.jvals);
     }
 }
 
@@ -69,16 +111,17 @@ struct BatchErrorStatus {
 /// @param state Four-dimensional concentration view with cell extent in dimension 0.
 /// @param dt Integration timestep in seconds.
 /// @param steps Number of timesteps to integrate per cell.
-/// @param jvals Pointer to Cloud-J photolysis rate array (may be nullptr if no photolysis).
+/// @param jvals Cloud-J photolysis rates in the state's memory space (empty view if none).
 template <typename SolverKernelsType, typename StateViewType>
 void execute_mechanism_serial_steps(StateViewType state, const double dt, const int steps,
-                                    const double* jvals = nullptr) {
+                                    const JvalsView<typename StateViewType::memory_space>& jvals = {}) {
     const int num_cells = state.extent(0);
+    auto jvals_view = detail::resolve_jvals(jvals, 512);
 
     for (int cell_idx = 0; cell_idx < num_cells; ++cell_idx) {
         SolverKernelsType solver;
         auto sub_state = Kokkos::subview(state, cell_idx, Kokkos::ALL(), 0, 0);
-        for (int step = 0; step < steps; ++step) { solver.integrate(dt, sub_state, jvals); }
+        for (int step = 0; step < steps; ++step) { solver.integrate(dt, sub_state, jvals_view); }
     }
 }
 
@@ -87,9 +130,10 @@ void execute_mechanism_serial_steps(StateViewType state, const double dt, const 
 /// @tparam StateViewType Kokkos view type containing cell-major concentrations.
 /// @param state Four-dimensional concentration view with cell extent in dimension 0.
 /// @param dt Integration timestep in seconds.
-/// @param jvals Pointer to Cloud-J photolysis rate array (may be nullptr if no photolysis).
+/// @param jvals Cloud-J photolysis rates in the state's memory space (empty view if none).
 template <typename SolverKernelsType, typename StateViewType>
-void execute_mechanism_serial(StateViewType state, const double dt, const double* jvals = nullptr) {
+void execute_mechanism_serial(StateViewType state, const double dt,
+                              const JvalsView<typename StateViewType::memory_space>& jvals = {}) {
     execute_mechanism_serial_steps<SolverKernelsType>(state, dt, 1, jvals);
 }
 
@@ -97,9 +141,9 @@ template <typename SolverKernelsType, typename StateViewType>
 struct TiledCellIntegrator {
     StateViewType m_state;
     double m_dt;
-    const double* m_jvals;
+    JvalsView<typename StateViewType::memory_space> m_jvals;
 
-    TiledCellIntegrator(StateViewType s, double dt, const double* jvals = nullptr)
+    TiledCellIntegrator(StateViewType s, double dt, const JvalsView<typename StateViewType::memory_space>& jvals = {})
         : m_state(s), m_dt(dt), m_jvals(jvals) {}
 
     KOKKOS_INLINE_FUNCTION
@@ -115,9 +159,9 @@ struct TiledCellTimeIntegrator {
     StateViewType m_state;
     double m_dt;
     int m_steps;
-    const double* m_jvals;
+    JvalsView<typename StateViewType::memory_space> m_jvals;
 
-    TiledCellTimeIntegrator(StateViewType s, double dt, int steps, const double* jvals = nullptr)
+    TiledCellTimeIntegrator(StateViewType s, double dt, int steps, const JvalsView<typename StateViewType::memory_space>& jvals = {})
         : m_state(s), m_dt(dt), m_steps(steps), m_jvals(jvals) {}
 
     KOKKOS_INLINE_FUNCTION
@@ -134,7 +178,12 @@ struct ParamsTiledCellIntegrator {
     HostExecutionParams m_params;
 
     ParamsTiledCellIntegrator(StateViewType s, const HostExecutionParams& params)
-        : m_state(s), m_params(params) {}
+        : m_state(s), m_params(params) {
+        // Normalise a caller-supplied empty photolysis view to the shared
+        // zero-filled array once, at the host launch boundary, so device code
+        // never allocates or branches on null.
+        m_params.jvals = detail::resolve_jvals(m_params.jvals, m_params.jvals_extent);
+    }
 
     KOKKOS_INLINE_FUNCTION
     void operator()(const int cell_idx) const {
@@ -158,12 +207,12 @@ struct BatchedTeamCellIntegrator {
     StateViewType m_state;
     double m_dt;
     int m_steps;
-    const double* m_jvals;
+    JvalsView<typename StateViewType::memory_space> m_jvals;
     ErrorViewType m_error_status;
 
     using ScratchViewType = Kokkos::View<double*, Kokkos::DefaultExecutionSpace::scratch_memory_space, Kokkos::MemoryUnmanaged>;
 
-    BatchedTeamCellIntegrator(StateViewType s, double dt, int steps, const double* jvals, ErrorViewType err)
+    BatchedTeamCellIntegrator(StateViewType s, double dt, int steps, const JvalsView<typename StateViewType::memory_space>& jvals, ErrorViewType err)
         : m_state(s), m_dt(dt), m_steps(steps), m_jvals(jvals), m_error_status(err) {}
 
     KOKKOS_INLINE_FUNCTION
@@ -219,7 +268,9 @@ struct BatchedTeamCellIntegrator {
 /// @brief Batched host integrator using hierarchical Kokkos::TeamPolicy
 template <typename SolverKernelsType, typename StateViewType, typename ErrorViewType>
 void execute_mechanism_steps_batched(const std::string& name, StateViewType state, const double dt,
-                                     const int steps, const double* jvals, ErrorViewType error_status,
+                                     const int steps,
+                                     const JvalsView<typename StateViewType::memory_space>& jvals,
+                                     ErrorViewType error_status,
                                      int team_size = 64) {
     using ExecSpace = Kokkos::DefaultExecutionSpace;
     using TeamPolicy = Kokkos::TeamPolicy<ExecSpace>;
@@ -234,11 +285,12 @@ void execute_mechanism_steps_batched(const std::string& name, StateViewType stat
     TeamPolicy policy(num_teams, Kokkos::AUTO);
     policy.set_scratch_size(0, Kokkos::PerTeam(scratch_bytes));
 
+    auto jvals_view = detail::resolve_jvals(jvals, 512);
     Kokkos::parallel_for(
         "MKPP_Batched_Team_Dispatch_" + name,
         policy,
         BatchedTeamCellIntegrator<SolverKernelsType, StateViewType, ErrorViewType>(
-            state, dt, steps, jvals, error_status));
+            state, dt, steps, jvals_view, error_status));
 }
 
 /// @brief Integrate all requested timesteps with a single Kokkos launch.
@@ -248,22 +300,24 @@ void execute_mechanism_steps_batched(const std::string& name, StateViewType stat
 /// @param state Four-dimensional concentration view with cell extent in dimension 0.
 /// @param dt Integration timestep in seconds.
 /// @param steps Number of timesteps to integrate per cell.
-/// @param jvals Pointer to Cloud-J photolysis rate array (may be nullptr if no photolysis).
+/// @param jvals Cloud-J photolysis rates in the state's memory space (empty view if none).
 template <typename SolverKernelsType, typename StateViewType>
 void execute_mechanism_steps(const std::string& name, StateViewType state, const double dt,
-                             const int steps, const double* jvals = nullptr) {
+                             const int steps,
+                             const JvalsView<typename StateViewType::memory_space>& jvals = {}) {
     using ExecSpace = Kokkos::DefaultExecutionSpace;
     const int num_cells = state.extent(0);
+    auto jvals_view = detail::resolve_jvals(jvals, 512);
 
     Kokkos::parallel_for(
         "MKPP_Grid_Dispatch_" + name,
         Kokkos::RangePolicy<ExecSpace>(0, num_cells, Kokkos::ChunkSize(64)),
-        TiledCellTimeIntegrator<SolverKernelsType, StateViewType>(state, dt, steps, jvals));
+        TiledCellTimeIntegrator<SolverKernelsType, StateViewType>(state, dt, steps, jvals_view));
 }
 
 template <typename SolverKernelsType, typename StateViewType>
 void execute_mechanism(const std::string& name, StateViewType state, double dt,
-                       const double* jvals = nullptr) {
+                       const JvalsView<typename StateViewType::memory_space>& jvals = {}) {
     execute_mechanism_steps<SolverKernelsType>(name, state, dt, 1, jvals);
 }
 

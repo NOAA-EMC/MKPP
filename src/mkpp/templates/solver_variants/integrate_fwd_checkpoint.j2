@@ -36,13 +36,14 @@
       template <class StateView>
       KOKKOS_INLINE_FUNCTION int integrate_fwd_checkpoint(
 {% if has_equilibrium %}
-          double dt_total, StateView& state, const double* jvals,
+          double dt_total, StateView& state, Kokkos::View<const double*, memory_space> jvals_view,
           CheckpointBuffer& chk, const double temp, const double rh{% if has_cloud_gated %}, const double clw{% endif %}) const
 {% else %}
-          double dt_total, StateView& state, const double* jvals,
+          double dt_total, StateView& state, Kokkos::View<const double*, memory_space> jvals_view,
           CheckpointBuffer& chk) const
 {% endif %}
       {
+          const double* jvals = jvals_view.data();
           const int NUM_SPECIES = {{ num_species }};
 {% if has_equilibrium %}
           const double Temp = temp;

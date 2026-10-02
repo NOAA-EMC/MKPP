@@ -22,12 +22,14 @@
        */
       template <class StateView, class RateView>
 {% if has_equilibrium %}
-      KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, const double* jvals, const double temp, const double rh{% if has_cloud_gated %}, const double clw{% endif %}) const {
+      KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, Kokkos::View<const double*, memory_space> jvals_view, const double temp, const double rh{% if has_cloud_gated %}, const double clw{% endif %}) const {
+          const double* jvals = jvals_view.data();
 {% for chunk in compiled_rate_chunks %}
           detail::compute_rates_chunk_{{ loop.index0 }}(state.data(), F_block.data(), jvals, temp, rh{% if has_cloud_gated %}, clw{% endif %});
 {% endfor %}
 {% else %}
-      KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, const double* jvals) const {
+      KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, Kokkos::View<const double*, memory_space> jvals_view) const {
+          const double* jvals = jvals_view.data();
 {% for chunk in compiled_rate_chunks %}
           detail::compute_rates_chunk_{{ loop.index0 }}(state.data(), F_block.data(), jvals, 0.0, 0.0);
 {% endfor %}

@@ -1,0 +1,23 @@
+{#
+  Device-callable implementation fragment: sparse forward/back substitution.
+
+  The LU solve is invoked from the KOKKOS_INLINE_FUNCTION integrator at every
+  stage, so it must be an inline definition visible to a device instantiation
+  rather than a host-only out-of-line symbol.
+
+  Context: mechanism_name, num_species, compiled_forward_steps, compiled_backward_steps
+#}
+#pragma once
+#include <Kokkos_Core.hpp>
+namespace mkpp::generated::{{ mechanism_name }}::detail {
+KOKKOS_INLINE_FUNCTION void solve_lu(const double* lu, const double* rhs, double* solution) {
+  constexpr int N = {{ num_species }};
+  double work[N];
+{% for step in compiled_forward_steps %}
+  work[{{ step.index }}] = {{ step.expr }};
+{% endfor %}
+{% for step in compiled_backward_steps %}
+  solution[{{ step.index }}] = {{ step.expr }};
+{% endfor %}
+}
+}  // namespace mkpp::generated::{{ mechanism_name }}::detail

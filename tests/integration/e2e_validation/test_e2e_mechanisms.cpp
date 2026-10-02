@@ -156,7 +156,7 @@ TEST(E2ESolverValidation, MechanismIntegration) {
     // Photolysis J-values: computed per-step to match KPP's diurnal SUN cycle.
     // For mechanisms without photolysis (n_spec < 79), jvals remains zero.
     std::vector<double> jvals_data(64, 0.0);
-    const double* jvals = jvals_data.data();
+    mkpp::host::JvalsView<typename ExecSpace::memory_space> jvals(jvals_data.data(), jvals_data.size());
 
     auto start = std::chrono::high_resolution_clock::now();
 

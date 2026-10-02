@@ -12,11 +12,12 @@ using ExecSpace = Kokkos::DefaultExecutionSpace;
 template <typename SolverKernelsType>
 struct DiurnalCellFunctor {
     using ViewType = Kokkos::View<double**, Kokkos::LayoutLeft, typename ExecSpace::memory_space>;
+    using JvalsType = Kokkos::View<const double*, typename ExecSpace::memory_space>;
     ViewType m_state;
     double m_dt;
-    const double* m_jvals;
+    JvalsType m_jvals;
 
-    DiurnalCellFunctor(ViewType state, double dt, const double* jvals)
+    DiurnalCellFunctor(ViewType state, double dt, JvalsType jvals)
         : m_state(state), m_dt(dt), m_jvals(jvals) {}
 
     KOKKOS_INLINE_FUNCTION
@@ -47,13 +48,13 @@ double run_diurnal_benchmark(int num_cells, int num_species, int num_steps = 144
 
     // Warmup step
     Kokkos::parallel_for("warmup", Kokkos::RangePolicy<ExecSpace>(0, num_cells),
-                         DiurnalCellFunctor<SolverKernelsType>(state, dt, jvals_dev.data()));
+                         DiurnalCellFunctor<SolverKernelsType>(state, dt, jvals_dev));
     Kokkos::fence();
 
     auto start = std::chrono::high_resolution_clock::now();
     for (int step = 0; step < num_steps; ++step) {
         Kokkos::parallel_for("diurnal_step", Kokkos::RangePolicy<ExecSpace>(0, num_cells),
-                             DiurnalCellFunctor<SolverKernelsType>(state, dt, jvals_dev.data()));
+                             DiurnalCellFunctor<SolverKernelsType>(state, dt, jvals_dev));
     }
     Kokkos::fence();
     auto end = std::chrono::high_resolution_clock::now();

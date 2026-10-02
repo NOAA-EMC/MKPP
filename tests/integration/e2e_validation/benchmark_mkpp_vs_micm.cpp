@@ -22,11 +22,12 @@ using ExecSpace = Kokkos::DefaultExecutionSpace;
 // ---------------------------------------------------------------------------
 struct MKPPDualFunctor {
     using ViewType = Kokkos::View<double**, Kokkos::LayoutLeft, typename ExecSpace::memory_space>;
+    using JvalsType = Kokkos::View<const double*, typename ExecSpace::memory_space>;
     ViewType m_state;
     double m_dt;
-    const double* m_jvals;
+    JvalsType m_jvals;
 
-    MKPPDualFunctor(ViewType state, double dt, const double* jvals)
+    MKPPDualFunctor(ViewType state, double dt, JvalsType jvals)
         : m_state(state), m_dt(dt), m_jvals(jvals) {}
 
     KOKKOS_INLINE_FUNCTION
@@ -184,7 +185,7 @@ int main(int argc, char* argv[]) {
 
         // Warmup MKPP
         Kokkos::parallel_for("warmup", Kokkos::RangePolicy<ExecSpace>(0, num_cells),
-                             MKPPDualFunctor(mkpp_state, dt, mkpp_jvals.data()));
+                             MKPPDualFunctor(mkpp_state, dt, mkpp_jvals));
         Kokkos::fence();
 
         // Re-initialize MKPP state for benchmark
@@ -201,7 +202,7 @@ int main(int argc, char* argv[]) {
         auto start_mkpp = std::chrono::high_resolution_clock::now();
         for (int step = 0; step < num_steps; ++step) {
             Kokkos::parallel_for("step", Kokkos::RangePolicy<ExecSpace>(0, num_cells),
-                                 MKPPDualFunctor(mkpp_state, dt, mkpp_jvals.data()));
+                                 MKPPDualFunctor(mkpp_state, dt, mkpp_jvals));
         }
         Kokkos::fence();
         auto end_mkpp = std::chrono::high_resolution_clock::now();

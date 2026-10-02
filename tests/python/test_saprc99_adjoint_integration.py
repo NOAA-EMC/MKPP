@@ -296,17 +296,26 @@ class TestSAPRC99AdjointGeneration:
 #endif
 
 namespace Kokkos {
-    struct Serial {};
-    template<typename T> T fmin(T a, T b) { return a < b ? a : b; }
-    template<typename T> T fmax(T a, T b) { return a > b ? a : b; }
+    struct Serial { using memory_space = Serial; };
+    template<typename A, typename B> auto fmin(A a, B b) { return a < b ? a : b; }
+    template<typename A, typename B> auto fmax(A a, B b) { return a > b ? a : b; }
+    template<typename A, typename B> auto min(A a, B b) { return a < b ? a : b; }
     template<typename T> T fabs(T a) { return a < 0 ? -a : a; }
-    template<typename T> T min(T a, T b) { return a < b ? a : b; }
     template<typename T> T sqrt(T a) { return std::sqrt(a); }
-    template<typename T> T pow(T a, T b) { return std::pow(a, b); }
+    template<typename A, typename B> auto pow(A a, B b) { return std::pow(a, b); }
     template<typename T> T cbrt(T a) { return std::cbrt(a); }
+    template<typename T> T log(T a) { return std::log(a); }
+    template<typename T> T exp(T a) { return std::exp(a); }
+    template<typename T> T log10(T a) { return std::log10(a); }
+    template<typename T> T log2(T a) { return std::log2(a); }
+    template<typename T> bool isfinite(T a) { return std::isfinite(a); }
+    namespace numbers { constexpr double pi = 3.14159265358979323846; }
     struct LayoutLeft {};
     struct MemoryUnmanaged {};
-    template<typename... Args> struct View { double data[1]; };
+    template<typename... Args> struct View {
+        double storage[1];
+        double* data() const { return const_cast<double*>(storage); }
+    };
 }
 """
         )
