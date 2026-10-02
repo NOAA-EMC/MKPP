@@ -14,6 +14,22 @@ endif()
 
 option(MKPP_ENABLE_KOKKOS_KERNELS "Enable KokkosKernels integration for batched computations" OFF)
 
+# Device-callability gate for the generated solver path. The option only activates when the linked
+# Kokkos actually exposes a device execution space (CUDA/HIP/SYCL); without one the gate stays inert
+# and downstream tests report 'device-unverified' rather than a false pass, because host compilation
+# alone does not prove device callability.
+option(MKPP_DEVICE_COMPILE_GATE
+       "Compile generated solver kernels for a Kokkos device backend when available" ON)
+
+if(MKPP_DEVICE_COMPILE_GATE
+   AND (Kokkos_ENABLE_CUDA
+        OR Kokkos_ENABLE_HIP
+        OR Kokkos_ENABLE_SYCL))
+  set(MKPP_DEVICE_GATE_ACTIVE ON)
+else()
+  set(MKPP_DEVICE_GATE_ACTIVE OFF)
+endif()
+
 if(MKPP_ENABLE_KOKKOS_KERNELS)
   find_package(KokkosKernels 5.0 QUIET)
   if(NOT KokkosKernels_FOUND)

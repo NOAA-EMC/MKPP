@@ -73,7 +73,7 @@ def main():
         state_list = [1.0e10] * max(num_species + 10, 200)
 
         jacobian_content = content
-        jacobian_path = Path(args.hpp).with_suffix("") / "jacobian.cpp"
+        jacobian_path = Path(args.hpp).with_suffix("") / "jacobian.hpp"
         if jacobian_path.is_file():
             jacobian_content = jacobian_path.read_text()
 

@@ -24,12 +24,14 @@
        */
       template <class StateView, class JacView>
 {% if has_equilibrium %}
-      KOKKOS_INLINE_FUNCTION void compute_jacobian(const StateView& state, JacView& J_block, const double* jvals, const double temp, const double rh{% if has_cloud_gated %}, const double clw{% endif %}) const {
+      KOKKOS_INLINE_FUNCTION void compute_jacobian(const StateView& state, JacView& J_block, Kokkos::View<const double*, memory_space> jvals_view, const double temp, const double rh{% if has_cloud_gated %}, const double clw{% endif %}) const {
+          const double* jvals = jvals_view.data();
 {% for chunk in compiled_jacobian_chunks %}
           detail::compute_jacobian_chunk_{{ loop.index0 }}(state.data(), J_block.data(), jvals, temp, rh{% if has_cloud_gated %}, clw{% endif %});
 {% endfor %}
 {% else %}
-      KOKKOS_INLINE_FUNCTION void compute_jacobian(const StateView& state, JacView& J_block, const double* jvals) const {
+      KOKKOS_INLINE_FUNCTION void compute_jacobian(const StateView& state, JacView& J_block, Kokkos::View<const double*, memory_space> jvals_view) const {
+          const double* jvals = jvals_view.data();
 {% for chunk in compiled_jacobian_chunks %}
           detail::compute_jacobian_chunk_{{ loop.index0 }}(state.data(), J_block.data(), jvals, 0.0, 0.0);
 {% endfor %}

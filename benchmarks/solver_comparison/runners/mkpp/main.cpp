@@ -203,10 +203,11 @@ void synchronize_completion() {
     Kokkos::fence("synchronize steady-state solve completion");
 }
 
-void execute_solve(StateView state, const Options& options, const double* jvals) {
+void execute_solve(StateView state, const Options& options, const mkpp::host::JvalsView<typename ExecutionSpace::memory_space>& jvals) {
     mkpp::host::HostExecutionParams parameters;
     parameters.dt = options.dt;
     parameters.jvals = jvals;
+    parameters.jvals_extent = jvals.extent(0);
     parameters.steps = options.steps;
     // Dispatch is deliberately by the governed mechanism name. In particular, TS1
     // reaches the generated native kernel through the host registry, never a
@@ -328,7 +329,7 @@ int main(int argc, char** argv) {
                     Options segment_options = options;
                     segment_options.dt = interval_seconds[segment];
                     segment_options.steps = 1;
-                    execute_solve(state, segment_options, jvals.data());
+                    execute_solve(state, segment_options, jvals);
                 }
             };
 
@@ -345,7 +346,7 @@ int main(int argc, char** argv) {
                         auto cell_state = Kokkos::subview(state, cell, Kokkos::ALL());
                         auto cell_rhs = Kokkos::subview(rhs, cell, Kokkos::ALL());
                         mkpp::generated::ts1::SolverKernels<ExecutionSpace>{}.compute_rates(
-                            cell_state, cell_rhs, jvals.data());
+                            cell_state, cell_rhs, jvals);
                     });
                 synchronize_completion();
                 const auto initial_rhs = copy_final_state(rhs);
@@ -362,7 +363,7 @@ int main(int argc, char** argv) {
             for (int warmup = 0; warmup < options.warmups; ++warmup) {
             reset_state(state, options);
             if (options.mechanism == "ts1") execute_ts1_schedule();
-            else execute_solve(state, options, jvals.data());
+            else execute_solve(state, options, jvals);
                 synchronize_completion();
             }
 
@@ -371,7 +372,7 @@ int main(int argc, char** argv) {
                 reset_state(state, options);  // Reset is deliberately outside every timed sample.
                 const auto started = start_timing();
                 if (options.mechanism == "ts1") execute_ts1_schedule();
-                else execute_solve(state, options, jvals.data());
+                else execute_solve(state, options, jvals);
                 synchronize_completion();
                 elapsed_ms += stop_timing(started);
             }

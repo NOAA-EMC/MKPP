@@ -1,23 +1,5 @@
-// Generated compiled rates kernel chunk 0
-// for carbon.  This file is part of the required compiled-artifact
-// pathway; do not include mechanism expressions in host-model translation units.
-#include <cmath>
-namespace mkpp::generated::carbon::detail {
-void compute_rates_chunk_0(
-    const double* state, double* rates,
-    const double* jvals, double temp, double rh) {
-  (void)temp;
-  (void)rh;
-  rates[0] = -1.0665177283814332e-13*state[0];
-  rates[1] = 38199.012 - 7.3679649e-14*state[1];
-  rates[2] = 4.2566446e-15;
-  rates[3] = 38199.012;
-  rates[4] = 6.3627720033519555e-15*state[0];
-  rates[5] = 1.0028900083479136e-13*state[0];
-  rates[6] = 7.3679649e-14*state[1];
-  rates[7] = -6.3627720033519555e-15*state[0] - 7.3679649e-14*state[1];
-  rates[8] = -1.0028900083479136e-13*state[0];
-  rates[9] = -4.2566446e-15;
-  rates[10] = -38199.012;
-}
-}  // namespace mkpp::generated::carbon::detail
+// Compiled rate-of-change translation unit for carbon.
+// The algebra lives in the shared device-callable fragment so host and device
+// build from one source of truth; this unit keeps the compiled static library
+// pathway intact for consumers that link it instead of including the header.
+#include "rates.hpp"

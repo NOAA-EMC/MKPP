@@ -92,6 +92,10 @@ def generate_headers(
     context = build_template_context(mech, solver_name, adjoint=True, simd_backend=simd_backend)
     # Add suffix to context for filename generation
     context["suffix"] = suffix
+    # The public header includes the reference factorization fragment only when
+    # the unrolled-reference backend is emitted, keeping the default artifact
+    # set free of the benchmark-only algebra.
+    context["emit_reference_backend"] = emit_reference_backend
 
     # 2. Render the header via Jinja2 template engine
     engine = TemplateEngine()
@@ -107,38 +111,48 @@ def generate_headers(
     # implementation units under a mechanism-specific directory.
     compiled_path = out_path / f"{mech.name}{suffix}"
     compiled_path.mkdir(parents=True, exist_ok=True)
-    for kernel, chunks in (("rates", context["compiled_rate_chunks"]), ("jacobian", context["compiled_jacobian_chunks"])):
+    # The algebra for every detail:: helper is emitted ONCE as a
+    # KOKKOS_INLINE_FUNCTION definition fragment under the mechanism directory.
+    # The public header includes the fragments (so a device instantiation sees
+    # inline bodies for the whole call chain) and each compiled translation unit
+    # includes only its own fragment (so per-TU compile cost stays bounded and
+    # the static-library pathway keeps working). Host and device therefore
+    # share a single source of truth with no forked chemistry algebra.
+    for kernel in ("rates", "jacobian"):
+        fragment_path = compiled_path / f"{kernel}.hpp"
+        with open(fragment_path, "w") as f:
+            f.write(engine.render(f"device_impl/{kernel}.hpp.j2", context))
         source_path = compiled_path / f"{kernel}.cpp"
-        rendered_chunks = []
-        for index, expressions in enumerate(chunks):
-            source_context = dict(context)
-            source_context.update({"compiled_kernel": kernel, "compiled_chunk_index": index, "compiled_expressions": expressions})
-            rendered_chunks.append(engine.render("compiled_kernel_chunk.cpp.j2", source_context))
         with open(source_path, "w") as f:
-            f.write("\n".join(rendered_chunks))
+            f.write(engine.render(f"compiled_{kernel}.cpp.j2", context))
         for stale_path in compiled_path.glob(f"{kernel}_*.cpp"):
             stale_path.unlink()
         compiled_sources.append(str(source_path))
 
     if emit_reference_backend:
-        for index, expressions in enumerate(context["compiled_lu_chunks"]):
-            source_context = dict(context)
-            source_context.update({"compiled_chunk_index": index, "compiled_expressions": expressions})
-            source_path = compiled_path / f"factorize_{index}.cpp"
-            with open(source_path, "w") as f:
-                f.write(engine.render("compiled_factorize_chunk.cpp.j2", source_context))
-            compiled_sources.append(str(source_path))
+        fragment_path = compiled_path / "factorize.hpp"
+        with open(fragment_path, "w") as f:
+            f.write(engine.render("device_impl/factorize.hpp.j2", context))
+        source_path = compiled_path / "factorize.cpp"
+        with open(source_path, "w") as f:
+            f.write(engine.render("compiled_factorize.cpp.j2", context))
+        compiled_sources.append(str(source_path))
     else:
-        for source_path in compiled_path.glob("factorize_*.cpp"):
+        for source_path in compiled_path.glob("factorize*.*"):
             source_path.unlink()
 
-    for kernel in ("solve",):
-        source_path = compiled_path / f"{kernel}.cpp"
-        with open(source_path, "w") as f:
-            f.write(engine.render(f"compiled_{kernel}.cpp.j2", context))
-        compiled_sources.append(str(source_path))
+    fragment_path = compiled_path / "solve.hpp"
+    with open(fragment_path, "w") as f:
+        f.write(engine.render("device_impl/solve.hpp.j2", context))
+    source_path = compiled_path / "solve.cpp"
+    with open(source_path, "w") as f:
+        f.write(engine.render("compiled_solve.cpp.j2", context))
+    compiled_sources.append(str(source_path))
 
     for kernel in ("supernodal_factorize", "supernodal_solve"):
+        fragment_path = compiled_path / f"{kernel}.hpp"
+        with open(fragment_path, "w") as f:
+            f.write(engine.render(f"device_impl/{kernel}.hpp.j2", context))
         source_path = compiled_path / f"{kernel}.cpp"
         with open(source_path, "w") as f:
             f.write(engine.render(f"{kernel}.cpp.j2", context))

@@ -1,16 +1,4 @@
-// Portable numeric forward/backward solve candidate for saprc99_mini.
-namespace mkpp::generated::saprc99_mini::detail {
-void solve_plan(const double* lu, const double* rhs, double* solution) {
-  constexpr int N = 17;
-  double work[N];
-  for (int row = 0; row < N; ++row) {
-    work[row] = rhs[row];
-    for (int column = 0; column < row; ++column) work[row] -= lu[row * N + column] * work[column];
-  }
-  for (int row = N - 1; row >= 0; --row) {
-    solution[row] = work[row];
-    for (int column = row + 1; column < N; ++column) solution[row] -= lu[row * N + column] * solution[column];
-    solution[row] /= lu[row * N + row];
-  }
-}
-}  // namespace mkpp::generated::saprc99_mini::detail
+// Compiled supernodal solve translation unit for saprc99_mini.
+// The portable forward/backward solve lives in the shared device-callable
+// fragment; this unit keeps the compiled static library pathway intact.
+#include "supernodal_solve.hpp"

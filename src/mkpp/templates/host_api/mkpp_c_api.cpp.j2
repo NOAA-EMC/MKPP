@@ -213,7 +213,13 @@ int mkpp_integrate(mkpp_handle_t handle, double dt) {
     }
 
     try {
-        const double* jvals = impl->photolysis_rates.data();
+        // Photolysis rates arrive as a host-space view; an unset array resolves
+        // to the shared zero-filled default at the dispatch boundary.
+        const double* photo_ptr = impl->photolysis_rates.data();
+        mkpp::host::JvalsView<Kokkos::HostSpace> jvals;
+        if (photo_ptr != nullptr && impl->num_photolysis > 0) {
+            jvals = mkpp::host::JvalsView<Kokkos::HostSpace>(photo_ptr, impl->num_photolysis);
+        }
         mkpp::host::execute_mechanism<SolverKernelsType>(
             "{{ mechanism_name }}", impl->species_conc, dt, jvals);
         return MKPP_SUCCESS;
@@ -243,7 +249,11 @@ int mkpp_evaluate_rates(mkpp_handle_t handle, double* rates_out) {
             SolverKernelsType solver;
             auto sub_conc = Kokkos::subview(impl->species_conc, i, Kokkos::ALL());
             auto sub_rates = Kokkos::subview(rates_view, i, Kokkos::ALL());
-            const double* jvals = impl->photolysis_rates.data() ? impl->photolysis_rates.data() + i * impl->num_photolysis : nullptr;
+            const double* photo_ptr = impl->photolysis_rates.data();
+            mkpp::host::JvalsView<Kokkos::HostSpace> jvals;
+            if (photo_ptr != nullptr && impl->num_photolysis > 0) {
+                jvals = mkpp::host::JvalsView<Kokkos::HostSpace>(photo_ptr + i * impl->num_photolysis, impl->num_photolysis);
+            }
             solver.compute_rates(sub_conc, sub_rates, jvals);
         }
         return MKPP_SUCCESS;
@@ -273,7 +283,11 @@ int mkpp_evaluate_jacobian(mkpp_handle_t handle, double* jac_out) {
             SolverKernelsType solver;
             auto sub_conc = Kokkos::subview(impl->species_conc, i, Kokkos::ALL());
             auto sub_jac = Kokkos::subview(jac_view, i, Kokkos::ALL(), Kokkos::ALL());
-            const double* jvals = impl->photolysis_rates.data() ? impl->photolysis_rates.data() + i * impl->num_photolysis : nullptr;
+            const double* photo_ptr = impl->photolysis_rates.data();
+            mkpp::host::JvalsView<Kokkos::HostSpace> jvals;
+            if (photo_ptr != nullptr && impl->num_photolysis > 0) {
+                jvals = mkpp::host::JvalsView<Kokkos::HostSpace>(photo_ptr + i * impl->num_photolysis, impl->num_photolysis);
+            }
             solver.compute_jacobian(sub_conc, sub_jac, jvals);
         }
         return MKPP_SUCCESS;

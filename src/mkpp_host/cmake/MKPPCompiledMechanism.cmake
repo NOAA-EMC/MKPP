@@ -10,10 +10,14 @@ function(mkpp_add_compiled_mechanism target generated_dir mechanism)
     CONFIGURE_DEPENDS
     "${generated_dir}/${mechanism}/rates.cpp"
     "${generated_dir}/${mechanism}/jacobian.cpp"
-    "${generated_dir}/${mechanism}/factorize_*.cpp"
     "${generated_dir}/${mechanism}/solve.cpp"
     "${generated_dir}/${mechanism}/supernodal_factorize.cpp"
     "${generated_dir}/${mechanism}/supernodal_solve.cpp")
+  # The unrolled reference factorization is emitted only with the reference backend flag, so include
+  # its translation unit when present.
+  if(EXISTS "${generated_dir}/${mechanism}/factorize.cpp")
+    list(APPEND mechanism_sources "${generated_dir}/${mechanism}/factorize.cpp")
+  endif()
   if(NOT mechanism_sources)
     message(
       FATAL_ERROR
@@ -22,4 +26,7 @@ function(mkpp_add_compiled_mechanism target generated_dir mechanism)
 
   add_library(${target} STATIC ${mechanism_sources})
   target_compile_features(${target} PUBLIC cxx_std_23)
+  # The kernel fragments include Kokkos headers for KOKKOS_INLINE_FUNCTION, so the translation units
+  # need the same backend flags (e.g. OpenMP) as the main library.
+  target_link_libraries(${target} PUBLIC Kokkos::kokkos)
 endfunction()

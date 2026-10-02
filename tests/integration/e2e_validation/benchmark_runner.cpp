@@ -48,7 +48,7 @@ double run_diurnal_benchmark(const std::string& mech_name, int num_cells, int nu
 
     mkpp::host::HostExecutionParams params;
     params.dt = dt;
-    params.jvals = jvals_dev.data();
+    params.jvals = jvals_dev;
     params.steps = 1;
 
     // Warmup step via host interface
