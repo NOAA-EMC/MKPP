@@ -295,6 +295,10 @@ class TestSAPRC99AdjointGeneration:
 #define KOKKOS_INLINE_FUNCTION inline
 #endif
 
+#ifndef KOKKOS_DEFAULTED_FUNCTION
+#define KOKKOS_DEFAULTED_FUNCTION
+#endif
+
 namespace Kokkos {
     struct Serial { using memory_space = Serial; };
     template<typename A, typename B> auto fmin(A a, B b) { return a < b ? a : b; }
@@ -311,6 +315,8 @@ namespace Kokkos {
     template<typename T> bool isfinite(T a) { return std::isfinite(a); }
     namespace numbers { constexpr double pi = 3.14159265358979323846; }
     struct LayoutLeft {};
+    struct LayoutRight {};
+    struct LayoutStride {};
     struct MemoryUnmanaged {};
     template<typename... Args> struct View {
         double storage[1];
@@ -345,7 +351,7 @@ namespace Kokkos {
         result = subprocess.run(
             [
                 compiler,
-                "-std=c++17",
+                "-std=c++20",
                 "-DMKPP_ENABLE_ADJOINT",
                 "-fsyntax-only",
                 "-I",

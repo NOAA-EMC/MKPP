@@ -64,7 +64,8 @@ double run_diurnal_benchmark(int num_cells, int num_species, int num_steps = 144
 }
 
 int main(int argc, char** argv) {
-    Kokkos::initialize(argc, argv);
+    // Exception-safe runtime ownership; also consumes --kokkos-* tuning args (FR-013).
+    Kokkos::ScopeGuard kokkos_scope(argc, argv);
     {
         std::cout << "=========================================================\n";
         std::cout << "    MKPP vs Legacy KPP SAPRC-99 Benchmark Suite          \n";
@@ -87,6 +88,5 @@ int main(int argc, char** argv) {
                       << std::setprecision(2) << throughput << "\n";
         }
     }
-    Kokkos::finalize();
     return 0;
 }

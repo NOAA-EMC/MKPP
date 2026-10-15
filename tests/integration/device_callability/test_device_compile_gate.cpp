@@ -215,9 +215,10 @@ TEST(DeviceCompileGate, Ts1) {
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
-    Kokkos::initialize(argc, argv);
-    int result = RUN_ALL_TESTS();
-    Kokkos::finalize();
+    // Exception-safe runtime ownership; guard finalizes when main returns,
+    // after the state tokens below are emitted (FR-013).
+    Kokkos::ScopeGuard kokkos_scope(argc, argv);
+    const int result = RUN_ALL_TESTS();
     // This binary is compiled only when a device backend is linked, so reaching
     // main means the generated call chain compiled for the device. A clean run
     // additionally means it launched on the device. Emitting the states here

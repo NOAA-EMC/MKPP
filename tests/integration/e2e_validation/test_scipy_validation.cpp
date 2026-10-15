@@ -290,9 +290,8 @@ TEST(ScipyValidation, ChapmanIntegration) {
 }
 
 int main(int argc, char** argv) {
-    Kokkos::initialize(argc, argv);
+    // Exception-safe runtime ownership; also consumes --kokkos-* tuning args (FR-013).
+    Kokkos::ScopeGuard kokkos_scope(argc, argv);
     ::testing::InitGoogleTest(&argc, argv);
-    int result = RUN_ALL_TESTS();
-    Kokkos::finalize();
-    return result;
+    return RUN_ALL_TESTS();
 }

@@ -240,7 +240,9 @@ constexpr int kDeviceUnverifiedExitCode = 2;
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
-    Kokkos::initialize(argc, argv);
+    // Exception-safe runtime ownership; guard finalizes when main returns,
+    // after the state tokens below are emitted (FR-013).
+    Kokkos::ScopeGuard kokkos_scope(argc, argv);
     const int result = RUN_ALL_TESTS();
     const bool device_present = accelerator_available();
 
@@ -254,7 +256,6 @@ int main(int argc, char** argv) {
     }
     std::fflush(stdout);
 
-    Kokkos::finalize();
     // A genuine assertion failure always wins: collapse any non-zero test
     // result to a plain failure code so it is never masked by the
     // device-unverified marker. Only a clean host run with no accelerator is

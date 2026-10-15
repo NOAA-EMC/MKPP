@@ -14,7 +14,13 @@ Host and device must share one source of truth: the same inline definitions
 live in a generated implementation header that both the public header and the
 compiled translation units include.
 
-**Validates: Requirements 2.1, 2.2, 3.1.**
+The register-budget tests (T027) additionally assert the documented per-thread
+dense micro-matrix budget is evaluated at generation time: a large mechanism
+(TS1, N=210) is flagged as exceeding the budget and must relocate its
+{J,W,LU}_values off the per-thread stack, while a small mechanism stays within
+tolerance (data-model E4, FR-007).
+
+**Validates: Requirements 2.1, 2.2, 3.1, FR-007.**
 """
 
 import re
@@ -112,3 +118,64 @@ def test_no_raw_pointer_jvals_in_entry_points(chapman_artifacts):
         r"KOKKOS_INLINE_FUNCTION\s+void\s+(?:integrate|compute_rates|compute_jacobian)\b[^;{]*const double\s*\*\s*jvals", header
     )
     assert raw is None, "entry point still accepts a raw host pointer for jvals"
+
+
+# ---------------------------------------------------------------------------
+# Register / per-thread memory budget (T027, FR-007, data-model E4)
+# ---------------------------------------------------------------------------
+
+
+def test_dense_matrix_bytes_formula():
+    """The per-thread footprint is three N x N double buffers (J, W, LU)."""
+    from mkpp.codegen import DENSE_MATRIX_BUFFERS, dense_matrix_bytes
+
+    assert DENSE_MATRIX_BUFFERS == 3
+    assert dense_matrix_bytes(4) == 3 * 4 * 4 * 8
+    assert dense_matrix_bytes(210) == 3 * 210 * 210 * 8
+
+
+def test_budget_within_for_small_mechanism():
+    """A small mechanism (chapman, N=4) stays within the documented budget and does not warn."""
+    import warnings as _warnings
+
+    from mkpp.codegen import per_thread_matrix_budget
+
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        record = per_thread_matrix_budget(4)
+    assert record["exceeds_budget"] is False
+    assert record["plan_mask_placement"] == "static-constexpr-inline"
+    assert not any("budget" in str(w.message) for w in caught)
+
+
+def test_budget_exceeded_for_large_mechanism():
+    """TS1 (N=210) exceeds the budget, warns at generation time, and plans relocation.
+
+    This is the FR-007 guarantee: a large mechanism's per-thread dense micro-matrix footprint is
+    bounded by a documented budget rather than left as unbounded per-thread stack arrays. The
+    warning + manifest record drive the team-scratch relocation plan (research R5).
+    """
+    import warnings as _warnings
+
+    from mkpp.codegen import MAX_MATRIX_BYTES_PER_THREAD, per_thread_matrix_budget
+
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        record = per_thread_matrix_budget(210)
+    assert record["exceeds_budget"] is True
+    assert record["dense_matrix_bytes"] > MAX_MATRIX_BYTES_PER_THREAD
+    assert record["plan_mask_placement"] == "device-view-relocation-pending"
+    assert any("budget" in str(w.message) for w in caught), "generation must warn when the budget is exceeded"
+
+
+def test_manifest_records_per_thread_budget(chapman_artifacts):
+    """generate_headers writes the documented budget evaluation into the mechanism manifest."""
+    import json
+    from pathlib import Path
+
+    manifest = json.loads(Path(chapman_artifacts["results"]["manifest"]).read_text())
+    budget = manifest["per_thread_budget"]
+    assert budget["num_species"] == 4
+    assert budget["buffers"] == 3
+    assert budget["max_bytes_per_thread"] > 0
+    assert budget["exceeds_budget"] is False

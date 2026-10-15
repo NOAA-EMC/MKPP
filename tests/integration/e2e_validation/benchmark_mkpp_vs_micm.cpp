@@ -42,7 +42,8 @@ struct MKPPDualFunctor {
 // Direct C++ Benchmark
 // ---------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
-    Kokkos::initialize(argc, argv);
+    // Exception-safe runtime ownership; also consumes --kokkos-* tuning args (FR-013).
+    Kokkos::ScopeGuard kokkos_scope(argc, argv);
     int exit_code = 0;
     {
         int num_cells = 1000;
@@ -268,6 +269,5 @@ int main(int argc, char* argv[]) {
                       << max_rel_err << " <= " << parity_threshold << ")." << std::endl;
         }
     }
-    Kokkos::finalize();
     return exit_code;
 }

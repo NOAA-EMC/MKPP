@@ -3,7 +3,8 @@
 #include "chapman.hpp"
 
 int main() {
-  Kokkos::initialize();
+  // Exception-safe runtime ownership: the guard finalizes when main returns (FR-013).
+  Kokkos::ScopeGuard kokkos_scope;
   {
   using Solver = mkpp::generated::chapman::SolverKernels<Kokkos::DefaultExecutionSpace>;
   Kokkos::View<double*> state("state", 4), delta("delta", 4), rates("rates", 4);
@@ -27,6 +28,5 @@ int main() {
     if (std::abs(hj(i,k) - ha(k,i)) > 1.0e-12) return 1;
   for (int i = 0; i < 4; ++i) { double expected = 0.0; for (int k = 0; k < 4; ++k) expected += hj(i,k) * hdelta(k); if (std::abs(hr(i) - expected) > 1.0e-12) return 2; }
   }
-  Kokkos::finalize();
   return 0;
 }
