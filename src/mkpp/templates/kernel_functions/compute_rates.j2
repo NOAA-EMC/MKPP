@@ -24,14 +24,18 @@
 {% if has_equilibrium %}
       KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, Kokkos::View<const double*, memory_space> jvals_view, const double temp, const double rh{% if has_cloud_gated %}, const double clw{% endif %}) const {
           const double* jvals = jvals_view.data();
+              const auto state_accessor = detail::make_stride_view(state);
+              const auto rates_accessor = detail::make_stride_view(F_block);
 {% for chunk in compiled_rate_chunks %}
-          detail::compute_rates_chunk_{{ loop.index0 }}(state.data(), F_block.data(), jvals, temp, rh{% if has_cloud_gated %}, clw{% endif %});
+              detail::compute_rates_chunk_{{ loop.index0 }}(state_accessor, rates_accessor, jvals, temp, rh{% if has_cloud_gated %}, clw{% endif %});
 {% endfor %}
 {% else %}
       KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, Kokkos::View<const double*, memory_space> jvals_view) const {
           const double* jvals = jvals_view.data();
+              const auto state_accessor = detail::make_stride_view(state);
+              const auto rates_accessor = detail::make_stride_view(F_block);
 {% for chunk in compiled_rate_chunks %}
-          detail::compute_rates_chunk_{{ loop.index0 }}(state.data(), F_block.data(), jvals, 0.0, 0.0);
+              detail::compute_rates_chunk_{{ loop.index0 }}(state_accessor, rates_accessor, jvals, 0.0, 0.0);
 {% endfor %}
 {% endif %}
       }

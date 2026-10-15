@@ -50,6 +50,7 @@
 // Including them here means a device instantiation of SolverKernels resolves the
 // entire call chain to inline device-callable bodies; the compiled translation
 // units include the same fragments, so host and device share one source of truth.
+#include "{{ mechanism_name }}{{ suffix }}/accessor.hpp"
 #include "{{ mechanism_name }}{{ suffix }}/rates.hpp"
 #include "{{ mechanism_name }}{{ suffix }}/jacobian.hpp"
 #include "{{ mechanism_name }}{{ suffix }}/supernodal_factorize.hpp"

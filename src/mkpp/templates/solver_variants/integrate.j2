@@ -65,6 +65,7 @@
           const double* jvals = jvals_view.data();
 {% endif %}
           const int NUM_SPECIES = {{ num_species }};
+          const auto state_accessor = detail::make_stride_view(state);
           // {{ tableau.name }} coefficients ({{ tableau.stages }}-stage, order {{ tableau.ELO | int }})
           const double g = {{ "%.17g" | format(tableau.Gamma[0]) }};
           const double safety = 0.9;
@@ -93,8 +94,9 @@
           // The expression-dense Jacobian is evaluated by bounded compiled
           // units.  The solver still uses the same symbolic sparse LU plan.
           double J_values[NUM_SPECIES * NUM_SPECIES] = {};
+          auto jacobian_accessor = detail::make_stride_view<double, 2>(J_values, NUM_SPECIES, 1);
 {% for chunk in compiled_jacobian_chunks %}
-          detail::compute_jacobian_chunk_{{ loop.index0 }}(state.data(), J_values, jvals, {% if has_equilibrium %}temp, rh{% if has_cloud_gated %}, clw{% endif %}{% else %}0.0, 0.0{% endif %});
+          detail::compute_jacobian_chunk_{{ loop.index0 }}(state_accessor, jacobian_accessor, jvals, {% if has_equilibrium %}temp, rh{% if has_cloud_gated %}, clw{% endif %}{% else %}0.0, 0.0{% endif %});
 {% endfor %}
           // Analytical Jacobian & Iteration Matrix W = inv_g_dt*I - J (sparse)
 {% for entry in jacobian_entries %}
@@ -164,8 +166,9 @@
 {% for i in range(num_species) %}
 {% if loop.first %}
           double F_values_{{ stage }}[NUM_SPECIES];
+          auto rate_accessor_{{ stage }} = detail::make_stride_view<double, 1>(F_values_{{ stage }}, 1);
 {% for chunk in compiled_rate_chunks %}
-          detail::compute_rates_chunk_{{ loop.index0 }}(state.data(), F_values_{{ stage }}, jvals, {% if has_equilibrium %}temp, rh{% if has_cloud_gated %}, clw{% endif %}{% else %}0.0, 0.0{% endif %});
+          detail::compute_rates_chunk_{{ loop.index0 }}(state_accessor, rate_accessor_{{ stage }}, jvals, {% if has_equilibrium %}temp, rh{% if has_cloud_gated %}, clw{% endif %}{% else %}0.0, 0.0{% endif %});
 {% endfor %}
 {% endif %}
 {% if permutation %}
@@ -188,8 +191,10 @@
 {% endif %}
 {% if loop.last %}
           double F_values_{{ stage }}[NUM_SPECIES];
+          auto rate_accessor_{{ stage }} = detail::make_stride_view<double, 1>(F_values_{{ stage }}, 1);
+          auto stage_state_accessor_{{ stage }} = detail::make_stride_view<double, 1>(stage_state_{{ stage }}, 1);
 {% for chunk in compiled_rate_chunks %}
-          detail::compute_rates_chunk_{{ loop.index0 }}(stage_state_{{ stage }}, F_values_{{ stage }}, jvals, {% if has_equilibrium %}temp, rh{% if has_cloud_gated %}, clw{% endif %}{% else %}0.0, 0.0{% endif %});
+          detail::compute_rates_chunk_{{ loop.index0 }}(stage_state_accessor_{{ stage }}, rate_accessor_{{ stage }}, jvals, {% if has_equilibrium %}temp, rh{% if has_cloud_gated %}, clw{% endif %}{% else %}0.0, 0.0{% endif %});
 {% endfor %}
 {% endif %}
 {% endfor %}

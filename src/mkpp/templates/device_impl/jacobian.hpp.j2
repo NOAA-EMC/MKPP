@@ -10,10 +10,11 @@
 #}
 #pragma once
 #include <Kokkos_Core.hpp>
+#include "accessor.hpp"
 namespace mkpp::generated::{{ mechanism_name }}::detail {
 {% for expressions in compiled_jacobian_chunks %}
 KOKKOS_INLINE_FUNCTION void compute_jacobian_chunk_{{ loop.index0 }}(
-    const double* state, double* jacobian,
+  StrideView<const double, 1> state, StrideView<double, 2> jacobian,
     const double* jvals, double temp, double rh{% if has_cloud_gated %}, double clw{% endif %}) {
 {% if has_equilibrium %}
   const double Temp = temp;
@@ -28,7 +29,7 @@ KOKKOS_INLINE_FUNCTION void compute_jacobian_chunk_{{ loop.index0 }}(
   (void)rh;
 {% endif %}
 {% for expression in expressions %}
-  jacobian[{{ expression.row }} * {{ num_species }} + {{ expression.column }}] = {{ expression.expr }};
+  jacobian({{ expression.row }}, {{ expression.column }}) = {{ expression.expr }};
 {% endfor %}
 }
 {% endfor %}

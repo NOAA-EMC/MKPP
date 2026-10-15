@@ -5,6 +5,7 @@
 // Including them here means a device instantiation of SolverKernels resolves the
 // entire call chain to inline device-callable bodies; the compiled translation
 // units include the same fragments, so host and device share one source of truth.
+#include "small_strato/accessor.hpp"
 #include "small_strato/rates.hpp"
 #include "small_strato/jacobian.hpp"
 #include "small_strato/supernodal_factorize.hpp"
@@ -67,7 +68,9 @@ namespace mkpp::generated::small_strato {
       template <class StateView, class RateView>
       KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, Kokkos::View<const double*, memory_space> jvals_view) const {
           const double* jvals = jvals_view.data();
-          detail::compute_rates_chunk_0(state.data(), F_block.data(), jvals, 0.0, 0.0);
+              const auto state_accessor = detail::make_stride_view(state);
+              const auto rates_accessor = detail::make_stride_view(F_block);
+              detail::compute_rates_chunk_0(state_accessor, rates_accessor, jvals, 0.0, 0.0);
       }
 
       /**
@@ -82,7 +85,9 @@ namespace mkpp::generated::small_strato {
       template <class StateView, class JacView>
       KOKKOS_INLINE_FUNCTION void compute_jacobian(const StateView& state, JacView& J_block, Kokkos::View<const double*, memory_space> jvals_view) const {
           const double* jvals = jvals_view.data();
-          detail::compute_jacobian_chunk_0(state.data(), J_block.data(), jvals, 0.0, 0.0);
+              const auto state_accessor = detail::make_stride_view(state);
+              const auto jacobian_accessor = detail::make_stride_view(J_block);
+              detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, 0.0, 0.0);
       }
 
 #ifdef MKPP_ENABLE_ADJOINT
@@ -236,6 +241,7 @@ namespace mkpp::generated::small_strato {
       KOKKOS_INLINE_FUNCTION void integrate(double dt_total, StateView& state, Kokkos::View<const double*, memory_space> jvals_view) const {
           const double* jvals = jvals_view.data();
           const int NUM_SPECIES = 7;
+          const auto state_accessor = detail::make_stride_view(state);
           // ROS-3 coefficients (3-stage, order 3)
           const double g = 0.435866521508459;
           const double safety = 0.9;
@@ -266,7 +272,8 @@ namespace mkpp::generated::small_strato {
           // The expression-dense Jacobian is evaluated by bounded compiled
           // units.  The solver still uses the same symbolic sparse LU plan.
           double J_values[NUM_SPECIES * NUM_SPECIES] = {};
-          detail::compute_jacobian_chunk_0(state.data(), J_values, jvals, 0.0, 0.0);
+          auto jacobian_accessor = detail::make_stride_view<double, 2>(J_values, NUM_SPECIES, 1);
+          detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, 0.0, 0.0);
           // Analytical Jacobian & Iteration Matrix W = inv_g_dt*I - J (sparse)
           double J_1_0 = J_values[1 * NUM_SPECIES + 5];
           double J_1_1 = J_values[1 * NUM_SPECIES + 1];
@@ -336,7 +343,8 @@ namespace mkpp::generated::small_strato {
           // --- Stage 1 ---
           // Rate evaluation F1 at S
           double F_values_1[NUM_SPECIES];
-          detail::compute_rates_chunk_0(state.data(), F_values_1, jvals, 0.0, 0.0);
+          auto rate_accessor_1 = detail::make_stride_view<double, 1>(F_values_1, 1);
+          detail::compute_rates_chunk_0(state_accessor, rate_accessor_1, jvals, 0.0, 0.0);
           double F1_0 = F_values_1[5];
           double F1_1 = F_values_1[1];
           double F1_2 = F_values_1[0];
@@ -385,7 +393,9 @@ namespace mkpp::generated::small_strato {
           stage_state_2[3] = Y2_5;
           stage_state_2[4] = Y2_6;
           double F_values_2[NUM_SPECIES];
-          detail::compute_rates_chunk_0(stage_state_2, F_values_2, jvals, 0.0, 0.0);
+          auto rate_accessor_2 = detail::make_stride_view<double, 1>(F_values_2, 1);
+          auto stage_state_accessor_2 = detail::make_stride_view<double, 1>(stage_state_2, 1);
+          detail::compute_rates_chunk_0(stage_state_accessor_2, rate_accessor_2, jvals, 0.0, 0.0);
           double F2_0 = F_values_2[5];
           double F2_1 = F_values_2[1];
           double F2_2 = F_values_2[0];

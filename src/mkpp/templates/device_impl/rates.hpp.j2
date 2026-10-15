@@ -11,10 +11,11 @@
 #}
 #pragma once
 #include <Kokkos_Core.hpp>
+#include "accessor.hpp"
 namespace mkpp::generated::{{ mechanism_name }}::detail {
 {% for expressions in compiled_rate_chunks %}
 KOKKOS_INLINE_FUNCTION void compute_rates_chunk_{{ loop.index0 }}(
-    const double* state, double* rates,
+  StrideView<const double, 1> state, StrideView<double, 1> rates,
     const double* jvals, double temp, double rh{% if has_cloud_gated %}, double clw{% endif %}) {
 {% if has_equilibrium %}
   const double Temp = temp;
@@ -29,7 +30,7 @@ KOKKOS_INLINE_FUNCTION void compute_rates_chunk_{{ loop.index0 }}(
   (void)rh;
 {% endif %}
 {% for expression in expressions %}
-  rates[{{ expression.index }}] = {{ expression.expr }};
+  rates({{ expression.index }}) = {{ expression.expr }};
 {% endfor %}
 }
 {% endfor %}

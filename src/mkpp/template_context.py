@@ -504,18 +504,18 @@ def build_template_context(
     def _chunk(items: list[Any], size: int) -> list[list[Any]]:
         return [items[index : index + size] for index in range(0, len(items), size)]
 
-    def _raw_pointer_expression(expression: str) -> str:
-        return re.sub(r"state\((\d+)\)", r"state[\1]", expression)
+    def _layout_aware_expression(expression: str) -> str:
+        return expression
 
     context["compiled_rate_chunks"] = [
         [
-            {"index": index, "expr": _raw_pointer_expression(expression)}
+            {"index": index, "expr": _layout_aware_expression(expression)}
             for index, expression in enumerate(chunk, start=chunk_index * 32)
         ]
         for chunk_index, chunk in enumerate(_chunk(rate_exprs_state, 32))
     ]
     context["compiled_jacobian_chunks"] = [
-        [{"row": row, "column": column, "expr": _raw_pointer_expression(expression)} for row, column, expression in chunk]
+        [{"row": row, "column": column, "expr": _layout_aware_expression(expression)} for row, column, expression in chunk]
         for chunk in _chunk(jacobian_entries_state, 256)
     ]
 

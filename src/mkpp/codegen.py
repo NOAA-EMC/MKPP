@@ -16,6 +16,7 @@ Public API (backward-compatible):
 
 import hashlib
 import json
+import warnings
 from pathlib import Path
 
 from .format_eqn import format_eqn
@@ -23,6 +24,53 @@ from .model import MechanismDefinition
 from .rosenbrock import SOLVER_COEFFICIENTS, RosenbrockTableau, get_A, get_C
 from .template_context import build_template_context
 from .template_engine import TemplateEngine
+
+# Documented per-thread budget for the dense micro-matrix state (data-model E4, FR-007).
+# The integrator allocates three N x N double buffers per thread (J_values, W_values,
+# LU_values). A mechanism whose footprint exceeds this budget must NOT keep them on the
+# per-thread stack for a device instantiation; the plan relocates them to team-scratch and
+# moves the symbolic L/U masks to device-accessible plan data. The budget is sized for the
+# largest mechanism that fits a single host thread stack comfortably (N <= 104).
+BYTES_PER_DOUBLE = 8
+DENSE_MATRIX_BUFFERS = 3  # {J,W,LU}_values
+MAX_MATRIX_BYTES_PER_THREAD = 256 * 1024  # 256 KiB per thread
+
+
+def dense_matrix_bytes(num_species: int) -> int:
+    """Per-thread bytes for the three dense N x N micro-matrix buffers."""
+    return DENSE_MATRIX_BUFFERS * num_species * num_species * BYTES_PER_DOUBLE
+
+
+def per_thread_matrix_budget(num_species: int) -> dict:
+    """Evaluate the documented per-thread memory budget for a mechanism (data-model E4).
+
+    Returns a manifest-ready record describing the dense micro-matrix footprint and whether
+    it exceeds the budget. Exceeding the budget emits a generation-time warning: the device
+    instantiation must relocate {J,W,LU}_values to team-scratch and the L/U masks to a
+    device-accessible View rather than per-thread stack arrays / per-TU inline masks.
+    """
+    footprint = dense_matrix_bytes(num_species)
+    exceeds = footprint > MAX_MATRIX_BYTES_PER_THREAD
+    record = {
+        "max_bytes_per_thread": MAX_MATRIX_BYTES_PER_THREAD,
+        "dense_matrix_bytes": footprint,
+        "num_species": num_species,
+        "buffers": DENSE_MATRIX_BUFFERS,
+        "exceeds_budget": exceeds,
+        "plan_mask_placement": "static-constexpr-inline" if not exceeds else "device-view-relocation-pending",
+    }
+    if exceeds:
+        warnings.warn(
+            f"Per-thread dense micro-matrix footprint for {num_species}-species mechanism is "
+            f"{footprint} bytes, exceeding the documented budget of "
+            f"{MAX_MATRIX_BYTES_PER_THREAD} bytes (FR-007). The device instantiation must "
+            f"relocate {{J,W,LU}}_values to team-scratch and the L/U masks to device-accessible "
+            f"plan data instead of per-thread stack arrays. The host supernodal default path is "
+            f"unchanged (research R5).",
+            stacklevel=2,
+        )
+    return record
+
 
 # Re-export public API for backward compatibility
 __all__ = [
@@ -92,6 +140,10 @@ def generate_headers(
     context = build_template_context(mech, solver_name, adjoint=True, simd_backend=simd_backend)
     # Add suffix to context for filename generation
     context["suffix"] = suffix
+    # Documented per-thread dense micro-matrix budget (data-model E4, FR-007). Evaluated at
+    # generation time so a mechanism exceeding the budget surfaces a warning and a manifest
+    # record driving the device team-scratch relocation plan (research R5).
+    budget_record = per_thread_matrix_budget(context["num_species"])
     # The public header includes the reference factorization fragment only when
     # the unrolled-reference backend is emitted, keeping the default artifact
     # set free of the benchmark-only algebra.
@@ -118,6 +170,15 @@ def generate_headers(
     # includes only its own fragment (so per-TU compile cost stays bounded and
     # the static-library pathway keeps working). Host and device therefore
     # share a single source of truth with no forked chemistry algebra.
+    # The layout-aware accessor is the shared vocabulary every chunk uses to
+    # address caller-owned buffers and the integrator's local scratch arrays
+    # with the correct strides (LayoutLeft cell rows are strided, not
+    # contiguous). It is emitted first because the rate/Jacobian fragments and
+    # the public header all depend on the type it defines.
+    accessor_path = compiled_path / "accessor.hpp"
+    with open(accessor_path, "w") as f:
+        f.write(engine.render("device_impl/accessor.hpp.j2", context))
+
     for kernel in ("rates", "jacobian"):
         fragment_path = compiled_path / f"{kernel}.hpp"
         with open(fragment_path, "w") as f:
@@ -170,6 +231,7 @@ def generate_headers(
         "aerosol_representation": mech.aerosol_representation.value,
         "simd_backend": simd_backend,
         "checksum": hashlib.sha256(mech.name.encode()).hexdigest(),
+        "per_thread_budget": budget_record,
         "artifacts": [
             {"kind": "header", "file": header_path.name},
             *({"kind": "compiled_kernel_source", "file": str(Path(source).relative_to(out_path))} for source in compiled_sources),
