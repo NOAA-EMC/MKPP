@@ -52,6 +52,14 @@ struct SolverKernels {
 > is recovered once at the launch boundary (`const double* jvals =
 > jvals_view.data();`), so the in-kernel numerics are unchanged.
 
+> **Breaking change — layout-aware buffer access.** State, rate, and Jacobian
+> buffers are no longer indexed with a hard-coded flat `arr[i*N + j]` formula.
+> Every entry point wraps its caller view in a `detail::StrideView` accessor
+> (see [section 8](#8-layout-aware-accessor-contract)) that reproduces the
+> view's own strides. A `Kokkos::LayoutLeft` species-major buffer and a
+> `Kokkos::LayoutRight` cell-major buffer now map to the same logical elements;
+> the former flat-index path silently mis-addressed one of the two.
+
 Mechanisms whose rate law depends on environmental drivers (temperature,
 relative humidity, cloud water) take those as trailing scalar arguments; the
 rest use the shorter form. The examples below show the base (three-argument)
@@ -380,11 +388,95 @@ Variables and species states in MKPP generated solvers conform to standard Clima
 
 | Variable | Standard Name | Long Name | Units | Memory Layout |
 | :--- | :--- | :--- | :--- | :--- |
-| `state` | `mole_fraction_of_chemical_species_in_air` | Chemical Species Concentration Vector | $\text{molec/cm}^3$ | `Kokkos::LayoutLeft` (GPU contiguous) |
+| `state` | `mole_fraction_of_chemical_species_in_air` | Chemical Species Concentration Vector | $\text{molec/cm}^3$ | Layout-agnostic via `StrideView` (§8) |
 | `temp` | `air_temperature` | Ambient Air Temperature | $K$ | Scalar / 1D View |
 | `press` | `air_pressure` | Ambient Air Pressure | $Pa$ | Scalar / 1D View |
 | `cair` | `molar_concentration_of_air` | Total Air Molar Density | $\text{molec/cm}^3$ | Scalar / 1D View |
 | `reaction_rates` | `chemical_reaction_rate` | Chemical Reaction Fluxes | $\text{molec/cm}^3/\text{s}$ | 1D View |
+
+---
+
+## 8. Layout-Aware Accessor Contract
+
+Every generated mechanism emits a per-mechanism header
+`mkpp-generated/<mechanism>/accessor.hpp` in the namespace
+`mkpp::generated::<mechanism>::detail`. It defines a non-owning,
+device-callable `StrideView<T, Rank>` (rank 1 or 2) and two `make_stride_view`
+builders. All generated kernel code — `compute_rates`, `compute_jacobian`,
+`integrate`, and the adjoint/TLM entry points — routes state, rate, and
+Jacobian buffer access through this accessor instead of a flat
+`arr[i*NUM_SPECIES + j]` formula.
+
+### Why it exists
+
+The C-ABI and Fortran host bindings pass species-major `LayoutLeft` buffers
+(stride of the species dimension = `num_cells`), while the E2E Kokkos tests
+historically used cell-major `LayoutRight` scratch. A kernel that hard-codes
+`row*NUM_SPECIES + col` is correct for exactly one of the two layouts and
+silently mis-addresses the other (NaN, wrong Jacobian, or a non-converging
+linear solve). The accessor removes that coupling: element `(i, j)` resolves to
+`data[i*stride(0) + j*stride(1)]`, i.e. the view's own mapping, whatever layout
+the caller bound.
+
+### API
+
+```cpp
+// From a caller Kokkos::View (rank 1 or 2). Layout must be stride-describable:
+// LayoutLeft, LayoutRight, or LayoutStride. Anything else fails at compile time
+// (static_assert) rather than mis-indexing at runtime.
+const auto state_acc = detail::make_stride_view(state);   // StrideView<const double, 1>
+auto       jac_acc   = detail::make_stride_view(J_block); // StrideView<double, 2>
+
+// From a contiguous in-kernel scratch array with known strides. The integrator's
+// local J_values/F_values are row-major by construction, so this reproduces the
+// former flat writes exactly while keeping a single indexing pathway.
+auto scratch_acc = detail::make_stride_view<double, 2>(J_values, NUM_SPECIES, 1);
+
+// Element access mirrors the view:
+state_acc(i);              // rank 1
+jac_acc(row, col);         // rank 2
+```
+
+`StrideView` is trivially copyable, carries a mutable→const relaxing
+converting constructor (never the reverse), and is annotated
+`KOKKOS_INLINE_FUNCTION`, so it is usable inside device kernels with zero
+overhead over the previous flat indexing.
+
+**Invariant:** a generated kernel must never reintroduce a raw
+`[i*NUM_SPECIES + j]` index on a caller-supplied buffer. This is enforced by
+`tests/contract/test_c_abi_layout.cpp` (LayoutLeft vs LayoutRight produce
+identical results) and `tests/integration/e2e_validation/test_accessor_compile.cpp`.
+
+---
+
+## 9. Device-Callability Status Vocabulary
+
+MKPP and its physics submodules annotate code with `KOKKOS_INLINE_FUNCTION`.
+To keep every "device" claim honest and machine-checkable (no aspirational
+symbol may exist without a device definition or an enforced host-only status),
+each **call chain** carries one of four statuses, recorded in
+`specs/024-kokkos-compliance-hardening/contracts/device-callability-status.md`
+and checked by `tests/python/test_device_honesty.py`:
+
+| Status | Meaning | Evidence required |
+| :--- | :--- | :--- |
+| `device-verified` | Chain instantiates and compiles under a device execution space (compile gate). | Compile-gate test id. |
+| `device-unverified` | Device-capable code is present, but **no device backend is configured in CI** (this build is `OPENMP;SERIAL`). Never conflated with a host pass. | CI reports the host result and the missing-device caveat together. |
+| `host-confined` | Chain is host-only by a structural limitation (e.g. cross-TU calls, host-only libraries) and cannot be device-annotated without a restructure. | Blocker documented with the restructure prerequisite. |
+| `removed` | An aspirational stub was deleted; no entry point exists to misreport. | A genuine implementation returns only with its staged re-add. |
+
+**CI caveat for this repository:** the container build (`cece-dev`) enables only
+`OPENMP` and `SERIAL`. No CUDA/HIP backend exists, so **every device result in
+feature 024 is reported `device-unverified` by design** — a host pass is
+evidence of layout/numerics correctness, never of on-device execution. The
+compile-gate test (`tests/integration/device_callability/test_device_compile_gate.cpp`)
+distinguishes "compiles for a device space" from "ran on a device".
+
+Rules enforced by the honesty test: `KOKKOS_INLINE_FUNCTION` must never be
+`#define`d to `inline`; device-annotated math must use `Kokkos::{fabs,exp,log,
+max,min,pow,sqrt,fmax,fmin,cbrt}` not `std::` equivalents; no `extern "C"
+*_device` symbol may be declared without an in-tree definition; and no auxiliary
+compute entry point may exist that cannot execute.
 
 ---
 
