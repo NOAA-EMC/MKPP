@@ -283,8 +283,15 @@ void emit_json_result(const Options& options, double elapsed_ms,
 
 int main(int argc, char** argv) {
     try {
+        // Own the Kokkos runtime lifetime through an exception-safe scope
+        // guard. Constructing it before the benchmark's own argument parsing
+        // lets Kokkos consume its documented runtime-tuning arguments
+        // (--kokkos-num-threads, --kokkos-device-id, ...) and shrink argc so
+        // parse_options only sees benchmark flags. The guard finalizes on every
+        // exit path, including a throw from argument parsing, so the catch
+        // handler no longer needs a manual finalize (FR-013).
+        Kokkos::ScopeGuard kokkos_scope(argc, argv);
         const Options options = parse_options(argc, argv);
-        Kokkos::initialize();
         {
             if (!mkpp::host::MechanismRegistry::has_mechanism(options.mechanism)) {
                 fatal("MKPP " + options.mechanism +
@@ -356,7 +363,6 @@ int main(int argc, char** argv) {
                     std::cout << '"' << ts1_binding::species_names[index] << "\":" << initial_rhs[index];
                 }
                 std::cout << "}\n";
-                Kokkos::finalize();
                 return EXIT_SUCCESS;
             }
 
@@ -385,13 +391,13 @@ int main(int argc, char** argv) {
             }
             emit_json_result(options, elapsed_ms, final_state);
         }
-        Kokkos::finalize();
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
+        // The scope guard declared in the try block owns finalization and is
+        // destroyed during unwinding, so no manual finalize is needed here.
         std::cerr << (std::string_view(error.what()).starts_with("FATAL ERROR:") ? ""
                                                                                  : "FATAL ERROR: ")
                   << error.what() << '\n';
-        if (Kokkos::is_initialized()) Kokkos::finalize();
         return EXIT_FAILURE;
     }
 }

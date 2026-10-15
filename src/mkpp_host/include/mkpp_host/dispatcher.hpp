@@ -1,6 +1,7 @@
 #pragma once
 #include <Kokkos_Core.hpp>
 
+#include <iostream>
 #include <string>
 
 namespace mkpp {
@@ -27,21 +28,34 @@ namespace detail {
 
 /// @brief Cached zero-filled photolysis array used when a caller supplies none.
 /// @note Materialised once per memory space at the host launch boundary; device
-///       code never allocates. The zeros stand in for the previous static array.
-///       The holder is intentionally heap-allocated and never destroyed: a
-///       function-local static Kokkos view would deallocate after
-///       Kokkos::finalize() during program exit, which Kokkos treats as an
-///       error. The process reclaims the single bounded buffer at exit.
+///       code never allocates. The array is created at a fixed capacity and is
+///       never resized, so a view handed out here can never be invalidated by
+///       a later, larger request — the previous grow-in-place pattern was a
+///       data race between concurrent host callers. The holder is intentionally
+///       heap-allocated and never destroyed: a function-local static Kokkos
+///       view would deallocate after Kokkos::finalize() during program exit,
+///       which Kokkos treats as an error. The process reclaims the single
+///       bounded buffer at exit.
 template <typename MemorySpace>
 inline JvalsView<MemorySpace> zero_jvals(std::size_t extent) {
     using MutableView = Kokkos::View<double*, MemorySpace>;
-    static MutableView& cached = *new MutableView();
-    if (cached.extent(0) < extent) {
-        MutableView fresh("MKPP_ZeroJvals", extent);
-        Kokkos::deep_copy(fresh, 0.0);
-        cached = fresh;
+    // Sized above every mechanism's reaction-slot count (TS1 uses 547) so the
+    // shared array covers all in-tree callers without growth.
+    constexpr std::size_t kCapacity = 1024;
+    static const MutableView& shared = *new MutableView([] {
+        MutableView zeros("MKPP_ZeroJvals", kCapacity);
+        Kokkos::deep_copy(zeros, 0.0);
+        return zeros;
+    }());
+    if (extent <= shared.extent(0)) {
+        return JvalsView<MemorySpace>(shared.data(), extent);
     }
-    return JvalsView<MemorySpace>(cached.data(), cached.extent(0));
+    // Oversized request: hand back a dedicated, reference-counted zero array.
+    // Returning the managed view itself (converted to the const view type)
+    // keeps it alive for the caller, so nothing can invalidate it later.
+    MutableView oversized("MKPP_ZeroJvals_oversized", extent);
+    Kokkos::deep_copy(oversized, 0.0);
+    return JvalsView<MemorySpace>(oversized);
 }
 
 /// @brief Replace an empty photolysis view with the shared zero-filled array.
@@ -138,23 +152,6 @@ void execute_mechanism_serial(StateViewType state, const double dt,
 }
 
 template <typename SolverKernelsType, typename StateViewType>
-struct TiledCellIntegrator {
-    StateViewType m_state;
-    double m_dt;
-    JvalsView<typename StateViewType::memory_space> m_jvals;
-
-    TiledCellIntegrator(StateViewType s, double dt, const JvalsView<typename StateViewType::memory_space>& jvals = {})
-        : m_state(s), m_dt(dt), m_jvals(jvals) {}
-
-    KOKKOS_INLINE_FUNCTION
-    void operator()(const int cell_idx) const {
-        SolverKernelsType solver;
-        auto sub_state = Kokkos::subview(m_state, cell_idx, Kokkos::ALL(), 0, 0);
-        solver.integrate(m_dt, sub_state, m_jvals);
-    }
-};
-
-template <typename SolverKernelsType, typename StateViewType>
 struct TiledCellTimeIntegrator {
     StateViewType m_state;
     double m_dt;
@@ -210,8 +207,6 @@ struct BatchedTeamCellIntegrator {
     JvalsView<typename StateViewType::memory_space> m_jvals;
     ErrorViewType m_error_status;
 
-    using ScratchViewType = Kokkos::View<double*, Kokkos::DefaultExecutionSpace::scratch_memory_space, Kokkos::MemoryUnmanaged>;
-
     BatchedTeamCellIntegrator(StateViewType s, double dt, int steps, const JvalsView<typename StateViewType::memory_space>& jvals, ErrorViewType err)
         : m_state(s), m_dt(dt), m_steps(steps), m_jvals(jvals), m_error_status(err) {}
 
@@ -225,9 +220,6 @@ struct BatchedTeamCellIntegrator {
         const int cells_per_team = (num_cells + num_teams - 1) / num_teams;
         const int begin_cell = team_rank * cells_per_team;
         const int end_cell = (begin_cell + cells_per_team < num_cells) ? (begin_cell + cells_per_team) : num_cells;
-
-        // Team-level scratch space allocation
-        ScratchViewType scratch_species(member.team_scratch(0), num_species * (end_cell - begin_cell));
 
         auto state = m_state;
         auto steps = m_steps;
@@ -248,12 +240,15 @@ struct BatchedTeamCellIntegrator {
             }
 
             if (has_non_finite) {
+                // Faults are recorded in the per-cell status buffer only; the
+                // host launch boundary surfaces them once. Device code must
+                // never stream diagnostics (non-deterministic interleaving,
+                // and no device I/O in production kernels).
                 if constexpr (requires { err.set_error(cell_idx, ERR_NON_FINITE_STATE); }) {
                     err.set_error(cell_idx, ERR_NON_FINITE_STATE);
                 } else {
                     err(cell_idx) = static_cast<int>(ERR_NON_FINITE_STATE);
                 }
-                Kokkos::printf("FATAL ERROR: Non-finite concentration detected at pre-kernel boundary for cell %d\n", cell_idx);
                 return;
             }
 
@@ -274,16 +269,11 @@ void execute_mechanism_steps_batched(const std::string& name, StateViewType stat
                                      int team_size = 64) {
     using ExecSpace = Kokkos::DefaultExecutionSpace;
     using TeamPolicy = Kokkos::TeamPolicy<ExecSpace>;
-    using ScratchViewType = Kokkos::View<double*, ExecSpace::scratch_memory_space, Kokkos::MemoryUnmanaged>;
 
     const int num_cells = static_cast<int>(state.extent(0));
-    const int num_species = static_cast<int>(state.extent(1));
     const int num_teams = (num_cells + team_size - 1) / team_size;
 
-    size_t scratch_bytes = ScratchViewType::shmem_size(num_species * team_size);
-
     TeamPolicy policy(num_teams, Kokkos::AUTO);
-    policy.set_scratch_size(0, Kokkos::PerTeam(scratch_bytes));
 
     auto jvals_view = detail::resolve_jvals(jvals, 512);
     Kokkos::parallel_for(
@@ -291,6 +281,29 @@ void execute_mechanism_steps_batched(const std::string& name, StateViewType stat
         policy,
         BatchedTeamCellIntegrator<SolverKernelsType, StateViewType, ErrorViewType>(
             state, dt, steps, jvals_view, error_status));
+
+    // Surface device-detected faults exactly once at the host boundary: copy
+    // the status buffer back and report a single summary. The per-cell codes
+    // remain available to callers through the status view.
+    auto status_view = [&]() {
+        if constexpr (requires { error_status.status; }) {
+            return error_status.status;
+        } else {
+            return error_status;
+        }
+    }();
+    auto host_status = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, status_view);
+    int faulted_cells = 0;
+    for (std::size_t i = 0; i < host_status.extent(0); ++i) {
+        if (host_status(i) != SUCCESS) {
+            ++faulted_cells;
+        }
+    }
+    if (faulted_cells > 0) {
+        std::cerr << "FATAL ERROR: batched integration of '" << name << "' reported "
+                  << faulted_cells << " faulted cell(s) of " << host_status.extent(0)
+                  << "; per-cell codes are in the status buffer\n";
+    }
 }
 
 /// @brief Integrate all requested timesteps with a single Kokkos launch.
