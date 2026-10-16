@@ -104,12 +104,7 @@ def main():
             jac_body,
         )
 
-        if (
-            not matches_1d
-            and not matches_2d
-            and not matches_compiled
-            and not matches_accessor
-        ):
+        if not matches_1d and not matches_2d and not matches_compiled and not matches_accessor:
             print("No Jacobian block found in HPP!", file=sys.stderr)
             sys.exit(1)
 

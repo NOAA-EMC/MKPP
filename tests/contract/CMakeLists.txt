@@ -5,8 +5,8 @@ target_link_libraries(test_batch_abi PRIVATE mkpp_host Kokkos::kokkos GTest::gte
 add_test(NAME test_batch_abi COMMAND test_batch_abi)
 
 # US3 (T026): the team+vector batched dense solve wired into the production dispatch
-# (MechanismRegistry::batched_dense_solve). Only meaningful when KokkosKernels is enabled,
-# matching the E6 `enabled` gate (FR-008).
+# (MechanismRegistry::batched_dense_solve). Only meaningful when KokkosKernels is enabled, matching
+# the E6 `enabled` gate (FR-008).
 if(MKPP_ENABLE_KOKKOS_KERNELS)
   add_executable(test_batched_production test_batched_production.cpp)
   target_link_libraries(test_batched_production PRIVATE mkpp_host Kokkos::kokkos GTest::gtest)

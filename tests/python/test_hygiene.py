@@ -52,9 +52,9 @@ def test_dead_tiled_cell_integrator_removed() -> None:
     (``TiledCellTimeIntegrator``, ``ParamsTiledCellIntegrator``) do not trip it.
     """
     source = _read(DISPATCHER)
-    assert not re.search(r"\bTiledCellIntegrator\b", source), (
-        "dead functor TiledCellIntegrator reintroduced in dispatcher.hpp (FR-009)"
-    )
+    assert not re.search(
+        r"\bTiledCellIntegrator\b", source
+    ), "dead functor TiledCellIntegrator reintroduced in dispatcher.hpp (FR-009)"
 
 
 def test_unread_team_scratch_removed() -> None:
@@ -65,12 +65,8 @@ def test_unread_team_scratch_removed() -> None:
     ``set_scratch_size`` charge.  Both the binding and the charge must stay gone.
     """
     source = _read(DISPATCHER)
-    assert "scratch_species" not in source, (
-        "never-read scratch_species binding reintroduced in dispatcher.hpp (FR-009)"
-    )
-    assert "set_scratch_size" not in source, (
-        "team scratch charge reintroduced without a consumer in dispatcher.hpp (FR-009)"
-    )
+    assert "scratch_species" not in source, "never-read scratch_species binding reintroduced in dispatcher.hpp (FR-009)"
+    assert "set_scratch_size" not in source, "team scratch charge reintroduced without a consumer in dispatcher.hpp (FR-009)"
 
 
 def _kernel_regions(source: str) -> list[str]:
@@ -115,9 +111,7 @@ def test_no_device_side_streaming_in_kernels() -> None:
     )
     for region in _kernel_regions(source):
         for token in forbidden:
-            assert token not in region, (
-                f"device-side I/O token {token!r} found inside a kernel body (FR-011)"
-            )
+            assert token not in region, f"device-side I/O token {token!r} found inside a kernel body (FR-011)"
 
 
 def test_no_kokkos_printf_anywhere_in_host_layer() -> None:
@@ -140,10 +134,8 @@ def test_entry_points_use_scope_guard() -> None:
     for path in SCOPE_GUARD_ENTRY_POINTS:
         source = _read(path)
         assert "Kokkos::ScopeGuard" in source, (
-            f"{path.relative_to(PROJECT_ROOT)} does not own the Kokkos lifetime "
-            "through a ScopeGuard (FR-013)"
+            f"{path.relative_to(PROJECT_ROOT)} does not own the Kokkos lifetime " "through a ScopeGuard (FR-013)"
         )
         assert "Kokkos::finalize()" not in source, (
-            f"{path.relative_to(PROJECT_ROOT)} still calls Kokkos::finalize() "
-            "manually instead of relying on ScopeGuard (FR-013)"
+            f"{path.relative_to(PROJECT_ROOT)} still calls Kokkos::finalize() " "manually instead of relying on ScopeGuard (FR-013)"
         )

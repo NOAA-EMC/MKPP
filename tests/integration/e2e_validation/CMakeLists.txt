@@ -94,9 +94,9 @@ target_include_directories(test_accessor_compile PRIVATE ${CMAKE_SOURCE_DIR}/mkp
 target_link_libraries(test_accessor_compile PRIVATE mkpp_host Kokkos::kokkos GTest::gtest_main)
 add_test(NAME test_accessor_compile COMMAND test_accessor_compile)
 
-# Determinism/bit-reproducibility across thread counts (feature 024, T033).
-# The Ex-Aero SZA sorter is header-only, so this target consumes its headers
-# directly instead of linking the exaero library.
+# Determinism/bit-reproducibility across thread counts (feature 024, T033). The Ex-Aero SZA sorter
+# is header-only, so this target consumes its headers directly instead of linking the exaero
+# library.
 add_executable(test_determinism test_determinism.cpp)
 target_include_directories(test_determinism PRIVATE ${CMAKE_SOURCE_DIR}/mkpp-generated
                                                     ${CMAKE_SOURCE_DIR}/src/exaero/include)

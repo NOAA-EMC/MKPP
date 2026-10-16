@@ -87,9 +87,9 @@ def test_jacobian_chunk_uses_accessor_not_flat_index(chapman_artifacts):
     assert jac, "expected a jacobian.hpp fragment"
     flat_write = re.search(r"\bjacobian\[\s*\d+\s*\*\s*\d+\s*\+\s*\d+\s*\]", jac)
     assert flat_write is None, f"jacobian chunk still uses flat row*N+col indexing: {flat_write}"
-    assert re.search(r"\bjacobian\(\s*\d+\s*,\s*\d+\s*\)\s*=", jac), (
-        "jacobian chunk must write through the two-argument accessor jacobian(row, col)"
-    )
+    assert re.search(
+        r"\bjacobian\(\s*\d+\s*,\s*\d+\s*\)\s*=", jac
+    ), "jacobian chunk must write through the two-argument accessor jacobian(row, col)"
 
 
 # ---------------------------------------------------------------------------
