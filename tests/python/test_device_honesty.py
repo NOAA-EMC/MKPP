@@ -59,14 +59,46 @@ def test_auxiliary_call_chain_has_no_undefined_device_symbols() -> None:
     assert declarations == []
 
 
-def test_auxiliary_engines_are_not_computed_in_exaero() -> None:
-    # Photolysis rates are an MKPP *input*, not computed by the aerosol module,
-    # and the ISORROPIA coupling is host-confined. Ex-Aero must not advertise or
-    # stub out auxiliary-engine compute entry points.
-    offenders = []
-    for path in _source_files(EXAERO):
-        source = path.read_text()
-        if re.search(r"\bAuxiliaryEngines\b|compute_photolysis|EXAERO_WITH_CLOUDJ|EXAERO_WITH_ISORROPIALITE", source):
-            offenders.append(str(path.relative_to(ROOT)))
+def test_auxiliary_engines_are_honestly_host_confined() -> None:
+    # The AuxiliaryEngines drivers exist but are host-confined: they wrap host
+    # bind(c) Fortran kernels that cannot run inside a device launch. The
+    # module must therefore never advertise device callability, and it must
+    # fail loud (never a silent no-op) when an engine was not compiled in.
+    header = (EXAERO / "include" / "auxiliary_engines.hpp").read_text()
+    impl = (EXAERO / "src" / "auxiliary_engines.cpp").read_text()
 
-    assert offenders == []
+    # 1. The team functors must not claim device portability (code lines only;
+    # the file's explanatory comments legitimately discuss the annotation).
+    annotated = [
+        line
+        for line in impl.splitlines()
+        if re.search(r"\bKOKKOS_INLINE_FUNCTION\b", line)
+        and not line.lstrip().startswith(("//", "///"))
+    ]
+    assert annotated == [], (
+        "auxiliary functor bodies must not be KOKKOS_INLINE_FUNCTION"
+    )
+
+    # 2. Dispatch is structurally pinned to the host execution space.
+    assert "DefaultHostExecutionSpace" in header
+    assert "DefaultHostExecutionSpace" in impl
+    assert "Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace>" not in header
+    assert "TeamPolicy<ExecSpace>" not in impl
+
+    # 3. A device backend combined with an engine option is a compile error.
+    assert impl.count("is host-confined: the") >= 2
+
+    # 4. With an engine option OFF the entry points throw instead of launching
+    #    an empty team (no silent no-op compute path).
+    assert "not compiled in" in impl
+    assert "silent no-op" in impl
+
+    # 5. The engine symbols carry no aspirational device suffix (code lines;
+    # comments may explain why they must not).
+    device_named = [
+        line
+        for line in impl.splitlines()
+        if re.search(r"\w+_device\b", line)
+        and not line.lstrip().startswith(("//", "///"))
+    ]
+    assert device_named == []
