@@ -14,9 +14,6 @@ on:
       - 'environment.yml'
       - 'pyproject.toml'
       - '.github/workflows/docker-publish.yml'
-  workflow_run:
-    workflows: ["MKPP CI Pipeline"]
-    types: [completed]
   workflow_dispatch:
 
 env:
@@ -46,7 +43,7 @@ jobs:
         env:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
         run: |
-          if [ -n "$GHCR_PAT" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
+          if [ -n "$GHCR_PAT" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::GHCR_PAT secret not set; image will be built but NOT pushed"
@@ -81,7 +78,7 @@ jobs:
         with:
           context: .
           file: .github/docker/Dockerfile.ci
-          push: ${{ steps.canpush.outputs.enabled == 'true' }}
+          push: ${{ github.event_name != 'pull_request' && steps.canpush.outputs.enabled == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

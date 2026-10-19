@@ -150,21 +150,22 @@ jobs:
     name: 4. C++ Core Build
     needs: aot-codegen
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/bbakernoaa/mkpp-ci-env:latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Build CI Environment Image
+        run: docker build -f .github/docker/Dockerfile.ci -t mkpp-ci-env:ci .
+
       - name: Configure CMake
-        run: cmake --preset default -DKokkos_ROOT=/opt/kokkos
+        run: docker run --rm -v "$PWD:/workspace" -w /workspace mkpp-ci-env:ci cmake --preset default -DKokkos_ROOT=/opt/kokkos
 
       - name: Verify Kokkos version
-        run: grep -E '^PACKAGE_VERSION "5\\.' /opt/kokkos/lib/cmake/Kokkos/KokkosConfigVersion.cmake
+        run: docker run --rm -v "$PWD:/workspace" -w /workspace mkpp-ci-env:ci grep -E '^PACKAGE_VERSION "5\.' /opt/kokkos/lib/cmake/Kokkos/KokkosConfigVersion.cmake
 
       - name: Build C++ Core
-        run: cmake --build --preset default
+        run: docker run --rm -v "$PWD:/workspace" -w /workspace mkpp-ci-env:ci cmake --build --preset default
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -177,14 +178,15 @@ jobs:
     name: 5. Test Gates
     needs: build-cpp
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/bbakernoaa/mkpp-ci-env:latest
     env:
       PYTHONPATH: ${{ github.workspace }}/src
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Build CI Environment Image
+        run: docker build -f .github/docker/Dockerfile.ci -t mkpp-ci-env:ci .
 
       - name: Download Build Artifacts
         uses: actions/download-artifact@v4
@@ -201,13 +203,13 @@ jobs:
         # import the mkpp package itself.  The CI image pre-bakes pytest,
         # pytest-xdist, and jsonschema; this step installs the editable mkpp
         # so PYTHONPATH-less imports resolve consistently.
-        run: pip3 install --no-build-isolation -e .
+        run: docker run --rm -v "$PWD:/workspace" -w /workspace mkpp-ci-env:ci pip3 install --no-build-isolation -e .
 
       - name: Run C++ CTests
-        run: ctest --preset default --output-on-failure
+        run: docker run --rm -v "$PWD:/workspace" -w /workspace -e PYTHONPATH="$GITHUB_WORKSPACE/src" mkpp-ci-env:ci ctest --preset default --output-on-failure
 
       - name: Run Python AOT Tests
-        run: pytest tests/python/ -ra -q --strict-markers
+        run: docker run --rm -v "$PWD:/workspace" -w /workspace -e PYTHONPATH="$GITHUB_WORKSPACE/src" mkpp-ci-env:ci pytest tests/python/ -ra -q --strict-markers
 
   device-gate:
     name: 6. Device Compile + Parity (optional)
