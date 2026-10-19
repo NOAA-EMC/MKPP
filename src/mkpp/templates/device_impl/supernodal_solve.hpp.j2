@@ -1,17 +1,15 @@
-{#
-  Device-callable implementation fragment: portable forward/backward solve.
-
-  solve_plan is invoked from the integrator's KOKKOS_INLINE_FUNCTION body, so
-  it must be an inline definition for a device instantiation to resolve the
-  whole chain. The bounded loops are the symbolic sparse plan, not chemistry
-  algebra, so no dynamic allocation is introduced.
-
-  Context: mechanism_name, num_species
+{# Shared algebra: inline and device-callable by default; emitted out of line
+   when MKPP_DEFINE_HOST_KERNELS is set by a separate CPU implementation unit.
 #}
 #pragma once
 #include <Kokkos_Core.hpp>
 namespace mkpp::generated::{{ mechanism_name }}::detail {
-KOKKOS_INLINE_FUNCTION void solve_plan(const double* lu, const double* rhs, double* solution) {
+#if defined(MKPP_DEFINE_HOST_KERNELS)
+void
+#else
+KOKKOS_INLINE_FUNCTION void
+#endif
+solve_plan(const double* lu, const double* rhs, double* solution) {
   constexpr int N = {{ num_species }};
   double work[N];
   for (int row = 0; row < N; ++row) {

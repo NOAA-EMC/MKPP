@@ -59,7 +59,7 @@ def test_detail_helpers_have_inline_definitions(chapman_artifacts):
     all_impl = "\n".join(fragments.values())
 
     for symbol in ("compute_rates_chunk_0", "compute_jacobian_chunk_0", "factorize_plan", "solve_plan"):
-        pattern = rf"KOKKOS_INLINE_FUNCTION\s+void\s+{symbol}\b"
+        pattern = rf"KOKKOS_INLINE_FUNCTION\s+void\s+(?:#endif\s+)?{symbol}\b"
         assert re.search(pattern, all_impl), f"detail::{symbol} is not emitted as a KOKKOS_INLINE_FUNCTION definition"
 
 

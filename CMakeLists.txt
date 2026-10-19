@@ -9,7 +9,7 @@ project(MKPP_Root CXX)
 # Kokkos:: targets. Adopt the parent's Kokkos when its targets already exist; find it ourselves only
 # for a standalone MKPP build.
 if(NOT TARGET Kokkos::kokkos)
-  find_package(Kokkos REQUIRED)
+  find_package(Kokkos 5.1.1 REQUIRED)
 endif()
 
 option(MKPP_ENABLE_KOKKOS_KERNELS "Enable KokkosKernels integration for batched computations" OFF)
@@ -78,6 +78,11 @@ option(MKPP_ENABLE_ADJOINT "Enable adjoint and tangent-linear APIs in generated 
 option(MKPP_ENABLE_SOLVER_COMPARISON "Build governed MICM, KPP, and MKPP comparison runners" OFF)
 
 if(MKPP_ENABLE_MICM_COMPARE OR MKPP_ENABLE_SOLVER_COMPARISON)
+  if(MKPP_ENABLE_SOLVER_COMPARISON)
+    # The primary comparison uses binary64. MUSICA v1 phase properties can
+    # contain finite values (e.g. 1e300) that binary32 cannot represent.
+    set(MICM_USE_DOUBLE ON CACHE BOOL "Use binary64 for governed solver comparisons" FORCE)
+  endif()
   set(CMAKE_CXX_STANDARD
       20
       CACHE STRING "C++ standard")
@@ -92,7 +97,11 @@ if(MKPP_ENABLE_MICM_COMPARE OR MKPP_ENABLE_SOLVER_COMPARISON)
 endif()
 
 if(MKPP_ENABLE_SOLVER_COMPARISON)
-  enable_language(Fortran OPTIONAL)
+  include(CheckLanguage)
+  check_language(Fortran)
+  if(CMAKE_Fortran_COMPILER)
+    enable_language(Fortran)
+  endif()
   add_subdirectory(benchmarks/solver_comparison/runners)
 endif()
 

@@ -1,6 +1,10 @@
 #pragma once
 #include <Kokkos_Core.hpp>
 
+#if KOKKOS_VERSION < 50101
+#error "MKPP requires Kokkos 5.1.1 or newer"
+#endif
+
 #include <iostream>
 #include <string>
 

@@ -1,17 +1,15 @@
-{#
-  Device-callable implementation fragment: portable supernodal LU plan.
-
-  factorize_plan is called from the integrator's KOKKOS_INLINE_FUNCTION body,
-  so it must be an inline definition for a device instantiation to resolve the
-  full call chain. The symbolic L/U masks are the same plan the reference
-  backend uses; chemistry algebra is not forked.
-
-  Context: mechanism_name, num_species, plan_l_pattern, plan_u_pattern
+{# Shared algebra: inline and device-callable by default; emitted out of line
+   when MKPP_DEFINE_HOST_KERNELS is set by a separate CPU implementation unit.
 #}
 #pragma once
 #include <Kokkos_Core.hpp>
 namespace mkpp::generated::{{ mechanism_name }}::detail {
-KOKKOS_INLINE_FUNCTION void factorize_plan(const double* w, double* lu) {
+#if defined(MKPP_DEFINE_HOST_KERNELS)
+void
+#else
+KOKKOS_INLINE_FUNCTION void
+#endif
+factorize_plan(const double* w, double* lu) {
   constexpr int N = {{ num_species }};
   static constexpr unsigned char L[N * N] = {
     {{ plan_l_pattern | join(', ') }}

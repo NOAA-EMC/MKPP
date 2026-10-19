@@ -149,14 +149,14 @@ def test_template_declares_compiled_rate_units():
     mech.sympy_metadata = prepare_unified_jacobian(mech)
     ctx = build_template_context(mech)
     rendered = render_template("device_impl/rates.hpp.j2", ctx)
-    assert "KOKKOS_INLINE_FUNCTION void compute_rates_chunk_0" in rendered
+    assert "KOKKOS_INLINE_FUNCTION void\n#endif\ncompute_rates_chunk_0" in rendered
 
     # The same contract applies to larger mechanisms.
     mech_saprc = load_mechanism("mechanisms/openatmos/saprc99_mini/mechanism.json")
     mech_saprc.sympy_metadata = prepare_unified_jacobian(mech_saprc)
     ctx_saprc = build_template_context(mech_saprc)
     rendered_saprc = render_template("device_impl/rates.hpp.j2", ctx_saprc)
-    assert "KOKKOS_INLINE_FUNCTION void compute_rates_chunk_0" in rendered_saprc
+    assert "KOKKOS_INLINE_FUNCTION void\n#endif\ncompute_rates_chunk_0" in rendered_saprc
 
 
 def test_continuous_transition_annotations(tmp_path):

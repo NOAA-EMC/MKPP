@@ -45,11 +45,11 @@
 #endif
 #include <KokkosBatched_Vector.hpp>
 {% endif %}
-// The expression-dense rate/Jacobian chunks and the sparse LU plan are emitted
-// as KOKKOS_INLINE_FUNCTION definitions in per-kernel implementation fragments.
-// Including them here means a device instantiation of SolverKernels resolves the
-// entire call chain to inline device-callable bodies; the compiled translation
-// units include the same fragments, so host and device share one source of truth.
+// CPU libraries can own the heavy helper definitions. Device builds keep the
+// complete device-callable implementation visible without relocatable device code.
+#if defined(MKPP_SEPARATE_HOST_KERNELS_{{ mechanism_name | upper }})
+#include "{{ mechanism_name }}{{ suffix }}/host_declarations.hpp"
+#else
 #include "{{ mechanism_name }}{{ suffix }}/accessor.hpp"
 #include "{{ mechanism_name }}{{ suffix }}/rates.hpp"
 #include "{{ mechanism_name }}{{ suffix }}/jacobian.hpp"
@@ -59,6 +59,7 @@
 #include "{{ mechanism_name }}{{ suffix }}/factorize.hpp"
 {% endif %}
 #include "{{ mechanism_name }}{{ suffix }}/solve.hpp"
+#endif
 // Generated solver for {{ mechanism_name }}
 {% if partition_metadata and partition_metadata.get is defined and partition_metadata.get("sza_sorted") %}
 // SZA Workload Sorted: true

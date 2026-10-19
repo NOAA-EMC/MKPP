@@ -1,17 +1,16 @@
-{#
-  Device-callable implementation fragment: reference LU factorization chunks.
-
-  Emitted only for the unrolled-reference benchmark backend. Each chunk is an
-  inline definition so the MKPP_USE_UNROLLED_REFERENCE path keeps compiling
-  alongside the portable supernodal plan.
-
-  Context: mechanism_name, num_species, compiled_lu_chunks
+{# Shared algebra: inline and device-callable by default; emitted out of line
+   when MKPP_DEFINE_HOST_KERNELS is set by a separate CPU implementation unit.
 #}
 #pragma once
 #include <Kokkos_Core.hpp>
 namespace mkpp::generated::{{ mechanism_name }}::detail {
 {% for expressions in compiled_lu_chunks %}
-KOKKOS_INLINE_FUNCTION void factorize_lu_chunk_{{ loop.index0 }}(const double* w, double* lu) {
+#if defined(MKPP_DEFINE_HOST_KERNELS)
+void
+#else
+KOKKOS_INLINE_FUNCTION void
+#endif
+factorize_lu_chunk_{{ loop.index0 }}(const double* w, double* lu) {
   constexpr int N = {{ num_species }};
 {% for entry in expressions %}
   lu[{{ entry.i }} * N + {{ entry.j }}] = {{ entry.expr }};

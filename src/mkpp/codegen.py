@@ -163,13 +163,9 @@ def generate_headers(
     # implementation units under a mechanism-specific directory.
     compiled_path = out_path / f"{mech.name}{suffix}"
     compiled_path.mkdir(parents=True, exist_ok=True)
-    # The algebra for every detail:: helper is emitted ONCE as a
-    # KOKKOS_INLINE_FUNCTION definition fragment under the mechanism directory.
-    # The public header includes the fragments (so a device instantiation sees
-    # inline bodies for the whole call chain) and each compiled translation unit
-    # includes only its own fragment (so per-TU compile cost stays bounded and
-    # the static-library pathway keeps working). Host and device therefore
-    # share a single source of truth with no forked chemistry algebra.
+    # Emit one algebra definition shared by two build modes: CPU libraries own
+    # out-of-line helpers; device/header-only consumers see inline bodies. The
+    # CPU public header includes only declarations to bound optimizer work.
     # The layout-aware accessor is the shared vocabulary every chunk uses to
     # address caller-owned buffers and the integrator's local scratch arrays
     # with the correct strides (LayoutLeft cell rows are strided, not
@@ -178,6 +174,9 @@ def generate_headers(
     accessor_path = compiled_path / "accessor.hpp"
     with open(accessor_path, "w") as f:
         f.write(engine.render("device_impl/accessor.hpp.j2", context))
+
+    declarations_path = compiled_path / "host_declarations.hpp"
+    declarations_path.write_text(engine.render("host_declarations.hpp.j2", context), encoding="utf-8")
 
     for kernel in ("rates", "jacobian"):
         fragment_path = compiled_path / f"{kernel}.hpp"

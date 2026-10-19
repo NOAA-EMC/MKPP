@@ -74,8 +74,8 @@ RUN pip3 install --no-cache-dir --root-user-action=ignore \
     mkdocstrings \
     mkdocstrings-python
 
-# Build and install Kokkos 4.5.01 to /opt/kokkos
-RUN git clone --depth 1 --branch 4.5.01 https://github.com/kokkos/kokkos.git /tmp/kokkos-src && \
+# Build and install the minimum supported Kokkos 5.1.1 to /opt/kokkos
+RUN git clone --depth 1 --branch 5.1.1 https://github.com/kokkos/kokkos.git /tmp/kokkos-src && \
     cmake -S /tmp/kokkos-src -B /tmp/kokkos-build \
       -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
