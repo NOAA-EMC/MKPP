@@ -65,7 +65,7 @@ def diffusion_lines(name: str, coefficient: float) -> list[str]:
         raise ValueError(f"{name}: diffusion coefficient must be finite and positive")
     literal = number(coefficient)
     return [
-        f'      static_assert(std::numeric_limits<micm::Real>::max() >= {literal},',
+        f"      static_assert(std::numeric_limits<micm::Real>::max() >= {literal},",
         f'                    "{name}: configured diffusion coefficient requires binary64 MICM");',
         f"      phase_species.emplace_back(species, {literal});",
     ]

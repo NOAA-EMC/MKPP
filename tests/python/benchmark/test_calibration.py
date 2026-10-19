@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import FrozenInstanceError
 
 import pytest
-
 from mkpp.benchmark.calibration import (
     TOLERANCE_MULTIPLIERS,
     CalibrationCandidate,

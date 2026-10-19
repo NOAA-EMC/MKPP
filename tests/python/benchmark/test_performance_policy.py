@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from mkpp.benchmark.policy import validate_performance_policy
 
 ROOT = Path(__file__).resolve().parents[3]

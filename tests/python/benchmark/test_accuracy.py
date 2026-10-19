@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 
 import pytest
-
 from mkpp.benchmark.accuracy import assess_trajectory_accuracy, symmetric_scaled_error
 
 ATOL = {"A": 1.0e-6, "B": 1.0e-3}

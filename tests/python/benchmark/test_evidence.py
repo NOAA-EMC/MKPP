@@ -3,7 +3,6 @@
 from copy import deepcopy
 
 import pytest
-
 from mkpp.benchmark.evidence import validate_requested_evidence
 from mkpp.benchmark.manifest import canonical_sha256
 from mkpp.benchmark.schema import SchemaValidationError

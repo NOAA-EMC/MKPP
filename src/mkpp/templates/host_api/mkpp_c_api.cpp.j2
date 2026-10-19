@@ -16,7 +16,7 @@
 #include <vector>
 
 using mkpp::mkpp_handle_impl;
-using ExecSpace = Kokkos::DefaultExecutionSpace;
+using ExecSpace = Kokkos::DefaultHostExecutionSpace;
 using SolverKernelsType = mkpp::generated::{{ mechanism_name }}::SolverKernels<ExecSpace>;
 
 namespace {
@@ -48,6 +48,18 @@ int validate_state_view(mkpp_handle_impl& impl) {
         impl.set_error("FATAL ERROR: species concentration view extents do not match the handle and mechanism");
         return MKPP_ERROR_INVALID_STATE;
     }
+    if (!impl.temperature.data() || !impl.air_density.data() || !impl.pressure.data()) {
+        impl.set_error("FATAL ERROR: per-cell meteorology is not bound");
+        return MKPP_ERROR_NULL_POINTER;
+    }
+    for (std::size_t cell = 0; cell < impl.num_cells; ++cell) {
+        if (!Kokkos::isfinite(impl.temperature(cell)) || impl.temperature(cell) <= 0.0 ||
+            !Kokkos::isfinite(impl.air_density(cell)) || impl.air_density(cell) <= 0.0 ||
+            !Kokkos::isfinite(impl.pressure(cell)) || impl.pressure(cell) <= 0.0) {
+            impl.set_error("FATAL ERROR: cell temperature, density and pressure must be positive and finite");
+            return MKPP_ERROR_INVALID_ARGUMENT;
+        }
+    }
     static_assert(std::is_same_v<decltype(std::declval<mkpp_handle_impl>().species_conc)::array_layout,
                                  Kokkos::LayoutLeft>);
     return MKPP_SUCCESS;
@@ -71,6 +83,7 @@ int mkpp_create_handle(mkpp_handle_t* handle_out, size_t num_cells) {
         handle->num_species = {{ num_species }};
         handle->num_reactions = {{ num_reactions }};
         handle->num_photolysis = {{ num_photolysis | default(0) }};
+        handle->num_rate_parameters = {{ num_runtime_parameters }};
         handle->is_initialized = false;
         *handle_out = reinterpret_cast<mkpp_handle_t>(handle);
         return MKPP_SUCCESS;
@@ -95,10 +108,6 @@ int mkpp_initialize(mkpp_handle_t handle) {
     auto* impl = reinterpret_cast<mkpp_handle_impl*>(handle);
 
     try {
-        // Allocate internal scratch workspace (num_cells, num_species + num_reactions)
-        std::size_t scratch_cols = impl->num_species + impl->num_reactions + 16;
-        impl->workspace_scratch = Kokkos::View<double**, Kokkos::LayoutLeft>(
-            "mkpp_scratch_workspace", impl->num_cells, scratch_cols);
         impl->is_initialized = true;
         return MKPP_SUCCESS;
     } catch (const std::exception& e) {
@@ -195,10 +204,28 @@ int mkpp_set_photolysis_ptrs(mkpp_handle_t handle, const double* photolysis_rate
     }
     auto* impl = reinterpret_cast<mkpp_handle_impl*>(handle);
 
-    if (impl->num_photolysis > 0) {
-        impl->photolysis_rates = Kokkos::View<double**, Kokkos::LayoutLeft, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>(
-            const_cast<double*>(photolysis_rates), impl->num_cells, impl->num_photolysis);
+    if (impl->num_rate_parameters > impl->num_photolysis) {
+        impl->set_error("FATAL ERROR: use mkpp_set_rate_parameter_ptrs for the complete runtime parameter array");
+        return MKPP_ERROR_INVALID_ARGUMENT;
     }
+    return mkpp_set_rate_parameter_ptrs(handle, photolysis_rates, impl->num_photolysis);
+}
+
+int mkpp_set_rate_parameter_ptrs(mkpp_handle_t handle, const double* values, size_t count) {
+    if (!handle || !values) return MKPP_ERROR_NULL_POINTER;
+    auto* impl = reinterpret_cast<mkpp_handle_impl*>(handle);
+    if (count != impl->num_rate_parameters) {
+        impl->set_error("FATAL ERROR: runtime parameter count does not match the generated mechanism");
+        return MKPP_ERROR_INVALID_ARGUMENT;
+    }
+    impl->photolysis_rates = decltype(impl->photolysis_rates)(const_cast<double*>(values), impl->num_cells, count);
+    return MKPP_SUCCESS;
+}
+
+int mkpp_set_cloud_water_ptr(mkpp_handle_t handle, const double* values) {
+    if (!handle || !values) return MKPP_ERROR_NULL_POINTER;
+    auto* impl = reinterpret_cast<mkpp_handle_impl*>(handle);
+    impl->cloud_water = decltype(impl->cloud_water)(const_cast<double*>(values), impl->num_cells);
     return MKPP_SUCCESS;
 }
 
@@ -236,17 +263,19 @@ int mkpp_integrate(mkpp_handle_t handle, double dt) {
     }
 
     try {
-        // Photolysis rates arrive as a host-space view; an unset array resolves
-        // to the shared zero-filled default at the dispatch boundary.
-        const double* photo_ptr = impl->photolysis_rates.data();
-        mkpp::host::JvalsView<Kokkos::HostSpace> jvals;
-        if (photo_ptr != nullptr && impl->num_photolysis > 0) {
-            jvals = mkpp::host::JvalsView<Kokkos::HostSpace>(photo_ptr, impl->num_photolysis);
-        }
-        Kokkos::View<double****, Kokkos::LayoutLeft, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> integration_state(
-            impl->species_conc.data(), impl->num_cells, impl->num_species, 1, 1);
-        mkpp::host::execute_mechanism<SolverKernelsType>(
-            "{{ mechanism_name }}", integration_state, dt, jvals);
+        if (!Kokkos::isfinite(dt) || dt <= 0.0) return MKPP_ERROR_INVALID_ARGUMENT;
+        mkpp::host::BasicHostExecutionParams<Kokkos::HostSpace> params;
+        params.dt = dt;
+        params.cell_temperature = impl->temperature;
+        params.cell_density = impl->air_density;
+        params.cell_humidity = impl->relative_humidity;
+        params.cell_cloud_water = impl->cloud_water;
+        params.cell_jvals = impl->photolysis_rates;
+        params.jvals_extent = impl->num_rate_parameters;
+        Kokkos::parallel_for("MKPP_C_API_{{ mechanism_name }}",
+            Kokkos::RangePolicy<ExecSpace>(0, impl->num_cells),
+            mkpp::host::ParamsTiledCellIntegrator<SolverKernelsType, decltype(impl->species_conc)>(impl->species_conc, params));
+        ExecSpace().fence("complete C API integration before returning host buffers");
         return MKPP_SUCCESS;
     } catch (const std::exception& e) {
         impl->set_error(e.what());
@@ -274,18 +303,17 @@ int mkpp_evaluate_rates(mkpp_handle_t handle, double* rates_out) {
 
     try {
         Kokkos::View<double**, Kokkos::LayoutLeft, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> rates_view(
-            rates_out, impl->num_cells, impl->num_reactions);
+            rates_out, impl->num_cells, impl->num_species);
 
+        std::vector<double> forcing(impl->num_rate_parameters);
         for (std::size_t i = 0; i < impl->num_cells; ++i) {
             SolverKernelsType solver;
             auto sub_conc = Kokkos::subview(impl->species_conc, i, Kokkos::ALL());
             auto sub_rates = Kokkos::subview(rates_view, i, Kokkos::ALL());
-            const double* photo_ptr = impl->photolysis_rates.data();
-            mkpp::host::JvalsView<Kokkos::HostSpace> jvals;
-            if (photo_ptr != nullptr && impl->num_photolysis > 0) {
-                jvals = mkpp::host::JvalsView<Kokkos::HostSpace>(photo_ptr + i * impl->num_photolysis, impl->num_photolysis);
-            }
-            solver.compute_rates(sub_conc, sub_rates, jvals);
+            for (std::size_t slot = 0; slot < forcing.size(); ++slot)
+                forcing[slot] = impl->photolysis_rates.data() ? impl->photolysis_rates(i, slot) : 0.0;
+            mkpp::host::JvalsView<Kokkos::HostSpace> jvals(forcing.data(), forcing.size());
+            solver.compute_rates(sub_conc, sub_rates, jvals{% if has_runtime_environment %}, impl->temperature(i), impl->relative_humidity.data() ? impl->relative_humidity(i) : 0.5{% if has_cloud_gated %}, impl->cloud_water.data() ? impl->cloud_water(i) : 0.0{% endif %}, impl->air_density(i){% endif %});
         }
         return MKPP_SUCCESS;
     } catch (const std::exception& e) {
@@ -316,16 +344,15 @@ int mkpp_evaluate_jacobian(mkpp_handle_t handle, double* jac_out) {
         Kokkos::View<double***, Kokkos::LayoutLeft, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> jac_view(
             jac_out, impl->num_cells, impl->num_species, impl->num_species);
 
+        std::vector<double> forcing(impl->num_rate_parameters);
         for (std::size_t i = 0; i < impl->num_cells; ++i) {
             SolverKernelsType solver;
             auto sub_conc = Kokkos::subview(impl->species_conc, i, Kokkos::ALL());
             auto sub_jac = Kokkos::subview(jac_view, i, Kokkos::ALL(), Kokkos::ALL());
-            const double* photo_ptr = impl->photolysis_rates.data();
-            mkpp::host::JvalsView<Kokkos::HostSpace> jvals;
-            if (photo_ptr != nullptr && impl->num_photolysis > 0) {
-                jvals = mkpp::host::JvalsView<Kokkos::HostSpace>(photo_ptr + i * impl->num_photolysis, impl->num_photolysis);
-            }
-            solver.compute_jacobian(sub_conc, sub_jac, jvals);
+            for (std::size_t slot = 0; slot < forcing.size(); ++slot)
+                forcing[slot] = impl->photolysis_rates.data() ? impl->photolysis_rates(i, slot) : 0.0;
+            mkpp::host::JvalsView<Kokkos::HostSpace> jvals(forcing.data(), forcing.size());
+            solver.compute_jacobian(sub_conc, sub_jac, jvals{% if has_runtime_environment %}, impl->temperature(i), impl->relative_humidity.data() ? impl->relative_humidity(i) : 0.5{% if has_cloud_gated %}, impl->cloud_water.data() ? impl->cloud_water(i) : 0.0{% endif %}, impl->air_density(i){% endif %});
         }
         return MKPP_SUCCESS;
     } catch (const std::exception& e) {

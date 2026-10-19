@@ -1,6 +1,4 @@
-{# Shared algebra: inline and device-callable by default; emitted out of line
-   when MKPP_DEFINE_HOST_KERNELS is set by a separate CPU implementation unit.
-#}
+{# Ordered sparse Doolittle plan, with compact numeric buffers. #}
 #pragma once
 #include <Kokkos_Core.hpp>
 namespace mkpp::generated::{{ mechanism_name }}::detail {
@@ -10,33 +8,25 @@ void
 KOKKOS_INLINE_FUNCTION void
 #endif
 factorize_plan(const double* w, double* lu) {
-  constexpr int N = {{ num_species }};
-  static constexpr unsigned char L[N * N] = {
-    {{ plan_l_pattern | join(', ') }}
+  struct Operation { int output, input, begin, end, diagonal; };
+  struct Product { int left, right; };
+  static constexpr Operation operations[] = {
+{% for op in compact.operations %}
+    { {{ op.output }}, {{ op.w }}, {{ op.begin }}, {{ op.end }}, {{ op.diagonal }} },
+{% endfor %}
   };
-  static constexpr unsigned char U[N * N] = {
-    {{ plan_u_pattern | join(', ') }}
+  static constexpr Product products[] = {
+{% for pair in compact.products %}
+    { {{ pair[0] }}, {{ pair[1] }} },
+{% else %}
+    { 0, 0 },
+{% endfor %}
   };
-  for (int row = 0; row < N; ++row)
-    for (int column = 0; column < N; ++column)
-      lu[row * N + column] = 0.0;
-  for (int row = 0; row < N; ++row) {
-    for (int column = row; column < N; ++column) {
-      if (!U[row * N + column]) continue;
-      double value = w[row * N + column];
-      for (int inner = 0; inner < row; ++inner)
-        if (L[row * N + inner] && U[inner * N + column])
-          value -= lu[row * N + inner] * lu[inner * N + column];
-      lu[row * N + column] = value;
-    }
-    for (int lower_row = row + 1; lower_row < N; ++lower_row) {
-      if (!L[lower_row * N + row]) continue;
-      double value = w[lower_row * N + row];
-      for (int inner = 0; inner < row; ++inner)
-        if (L[lower_row * N + inner] && U[inner * N + row])
-          value -= lu[lower_row * N + inner] * lu[inner * N + row];
-      lu[lower_row * N + row] = value / lu[row * N + row];
-    }
+  for (const auto& op : operations) {
+    double value = op.input >= 0 ? w[op.input] : 0.0;
+    for (int product = op.begin; product < op.end; ++product)
+      value -= lu[products[product].left] * lu[products[product].right];
+    lu[op.output] = op.diagonal >= 0 ? value / lu[op.diagonal] : value;
   }
 }
 }  // namespace mkpp::generated::{{ mechanism_name }}::detail

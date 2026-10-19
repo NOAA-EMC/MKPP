@@ -1,16 +1,17 @@
 #pragma once
 #include <Kokkos_Core.hpp>
-// The expression-dense rate/Jacobian chunks and the sparse LU plan are emitted
-// as KOKKOS_INLINE_FUNCTION definitions in per-kernel implementation fragments.
-// Including them here means a device instantiation of SolverKernels resolves the
-// entire call chain to inline device-callable bodies; the compiled translation
-// units include the same fragments, so host and device share one source of truth.
+// CPU libraries can own the heavy helper definitions. Device builds keep the
+// complete device-callable implementation visible without relocatable device code.
+#if defined(MKPP_SEPARATE_HOST_KERNELS_SMALL_STRATO)
+#include "small_strato/host_declarations.hpp"
+#else
 #include "small_strato/accessor.hpp"
 #include "small_strato/rates.hpp"
 #include "small_strato/jacobian.hpp"
 #include "small_strato/supernodal_factorize.hpp"
 #include "small_strato/supernodal_solve.hpp"
 #include "small_strato/solve.hpp"
+#endif
 // Generated solver for small_strato
 // SZA Workload Sorted: true
 // Hysteresis/Spline Continuous Transition: true
@@ -51,6 +52,9 @@ namespace mkpp::generated::small_strato {
   template<typename DeviceType>
   struct SolverKernels {
       using memory_space = typename DeviceType::memory_space;
+      static constexpr bool SUPPORTS_RUNTIME_ENVIRONMENT = false;
+      static constexpr int NUM_RUNTIME_PARAMETERS = 4;
+      static constexpr bool HAS_CLOUD_GATED = false;
 #ifdef MKPP_ENABLE_ADJOINT
       // Expose the checkpoint buffer through the kernel type so generic
       // device-path callers can name it without the mechanism namespace.
@@ -70,7 +74,7 @@ namespace mkpp::generated::small_strato {
           const double* jvals = jvals_view.data();
               const auto state_accessor = detail::make_stride_view(state);
               const auto rates_accessor = detail::make_stride_view(F_block);
-              detail::compute_rates_chunk_0(state_accessor, rates_accessor, jvals, 0.0, 0.0);
+              detail::compute_rates_chunk_0(state_accessor, rates_accessor, jvals, 0.0, 0.0, 2.46e+19);
       }
 
       /**
@@ -87,7 +91,7 @@ namespace mkpp::generated::small_strato {
           const double* jvals = jvals_view.data();
               const auto state_accessor = detail::make_stride_view(state);
               const auto jacobian_accessor = detail::make_stride_view(J_block);
-              detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, 0.0, 0.0);
+              detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, 0.0, 0.0, 2.46e+19);
       }
 
 #ifdef MKPP_ENABLE_ADJOINT
@@ -271,9 +275,46 @@ namespace mkpp::generated::small_strato {
           const double S_6 = state(Species::NO2);  // [NO2]
           // The expression-dense Jacobian is evaluated by bounded compiled
           // units.  The solver still uses the same symbolic sparse LU plan.
+#ifndef MKPP_USE_UNROLLED_REFERENCE
+          double J_values[28] = {};
+          auto jacobian_accessor = detail::StrideView<double, 2>::compact(J_values);
+          detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, 0.0, 0.0, 2.46e+19);
+          double W_values[29];
+          W_values[0] = inv_g_dt;
+          W_values[1] = 0.0 - J_values[8];
+          W_values[2] = inv_g_dt - J_values[6];
+          W_values[3] = 0.0 - J_values[7];
+          W_values[4] = 0.0 - J_values[4];
+          W_values[5] = 0.0 - J_values[1];
+          W_values[6] = inv_g_dt - J_values[0];
+          W_values[7] = 0.0 - J_values[5];
+          W_values[8] = 0.0 - J_values[2];
+          W_values[9] = 0.0 - J_values[3];
+          W_values[10] = 0.0 - J_values[23];
+          W_values[11] = 0.0 - J_values[22];
+          W_values[12] = inv_g_dt - J_values[27];
+          W_values[13] = 0.0 - J_values[24];
+          W_values[14] = 0.0 - J_values[25];
+          W_values[15] = 0.0 - J_values[26];
+          W_values[16] = 0.0 - J_values[10];
+          W_values[17] = 0.0 - J_values[9];
+          W_values[18] = 0.0 - J_values[13];
+          W_values[19] = inv_g_dt - J_values[11];
+          W_values[20] = 0.0 - J_values[12];
+          W_values[21] = 0.0 - J_values[14];
+          W_values[22] = 0.0 - J_values[15];
+          W_values[23] = inv_g_dt - J_values[16];
+          W_values[24] = 0.0 - J_values[17];
+          W_values[25] = 0.0 - J_values[18];
+          W_values[26] = 0.0 - J_values[19];
+          W_values[27] = 0.0 - J_values[20];
+          W_values[28] = inv_g_dt - J_values[21];
+          double LU_values[32];
+          detail::factorize_plan(W_values, LU_values);
+#else
           double J_values[NUM_SPECIES * NUM_SPECIES] = {};
           auto jacobian_accessor = detail::make_stride_view<double, 2>(J_values, NUM_SPECIES, 1);
-          detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, 0.0, 0.0);
+          detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, 0.0, 0.0, 2.46e+19);
           // Analytical Jacobian & Iteration Matrix W = inv_g_dt*I - J (sparse)
           double J_1_0 = J_values[1 * NUM_SPECIES + 5];
           double J_1_1 = J_values[1 * NUM_SPECIES + 1];
@@ -334,9 +375,6 @@ namespace mkpp::generated::small_strato {
           W_values[6 * NUM_SPECIES + 5] = -J_6_5;
           W_values[6 * NUM_SPECIES + 6] = inv_g_dt - J_6_6;
           double LU_values[NUM_SPECIES * NUM_SPECIES] = {};
-#ifndef MKPP_USE_UNROLLED_REFERENCE
-          detail::factorize_plan(W_values, LU_values);
-#else
           detail::factorize_lu_chunk_0(W_values, LU_values);
 #endif
 
@@ -344,7 +382,7 @@ namespace mkpp::generated::small_strato {
           // Rate evaluation F1 at S
           double F_values_1[NUM_SPECIES];
           auto rate_accessor_1 = detail::make_stride_view<double, 1>(F_values_1, 1);
-          detail::compute_rates_chunk_0(state_accessor, rate_accessor_1, jvals, 0.0, 0.0);
+          detail::compute_rates_chunk_0(state_accessor, rate_accessor_1, jvals, 0.0, 0.0, 2.46e+19);
           double F1_0 = F_values_1[5];
           double F1_1 = F_values_1[1];
           double F1_2 = F_values_1[0];
@@ -395,7 +433,7 @@ namespace mkpp::generated::small_strato {
           double F_values_2[NUM_SPECIES];
           auto rate_accessor_2 = detail::make_stride_view<double, 1>(F_values_2, 1);
           auto stage_state_accessor_2 = detail::make_stride_view<double, 1>(stage_state_2, 1);
-          detail::compute_rates_chunk_0(stage_state_accessor_2, rate_accessor_2, jvals, 0.0, 0.0);
+          detail::compute_rates_chunk_0(stage_state_accessor_2, rate_accessor_2, jvals, 0.0, 0.0, 2.46e+19);
           double F2_0 = F_values_2[5];
           double F2_1 = F_values_2[1];
           double F2_2 = F_values_2[0];

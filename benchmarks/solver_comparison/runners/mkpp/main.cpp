@@ -209,6 +209,10 @@ void execute_solve(StateView state, const Options& options, const mkpp::host::Jv
     parameters.jvals = jvals;
     parameters.jvals_extent = jvals.extent(0);
     parameters.steps = options.steps;
+    if (options.mechanism == "ts1") {
+        parameters.temp = 287.45;
+        parameters.air_density = 42.393400541636808;
+    }
     // Dispatch is deliberately by the governed mechanism name. In particular, TS1
     // reaches the generated native kernel through the host registry, never a
     // Chapman-shaped placeholder or a raw species-index adapter.

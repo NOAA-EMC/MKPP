@@ -3,7 +3,6 @@
 import hashlib
 
 import yaml
-
 from mkpp.benchmark.audit import audit_campaign_assets
 
 

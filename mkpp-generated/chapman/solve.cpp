@@ -1,4 +1,5 @@
-// Compiled sparse forward/back substitution translation unit for
-// chapman. The algebra lives in the shared device-callable
-// fragment; this unit keeps the compiled static library pathway intact.
+// Generated chapman kernel definitions from the shared implementation.
+#if defined(MKPP_SEPARATE_HOST_KERNELS_CHAPMAN)
+#define MKPP_DEFINE_HOST_KERNELS
+#endif
 #include "solve.hpp"

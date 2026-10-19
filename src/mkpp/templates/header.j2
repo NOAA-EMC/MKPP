@@ -79,7 +79,7 @@ namespace mkpp::generated::{{ mechanism_name }} {
 {% endfor %}
   };
 
-{% if has_equilibrium %}
+{% if has_runtime_environment %}
 
   // Equilibrium meteorological input indices
   enum class EquilibriumInput : int {
@@ -127,6 +127,9 @@ namespace mkpp::generated::{{ mechanism_name }} {
   template<typename DeviceType>
   struct SolverKernels {
       using memory_space = typename DeviceType::memory_space;
+      static constexpr bool SUPPORTS_RUNTIME_ENVIRONMENT = {{ "true" if has_runtime_environment else "false" }};
+      static constexpr int NUM_RUNTIME_PARAMETERS = {{ num_runtime_parameters }};
+      static constexpr bool HAS_CLOUD_GATED = {{ "true" if has_cloud_gated else "false" }};
 {% if adjoint_enabled %}
 #ifdef MKPP_ENABLE_ADJOINT
       // Expose the checkpoint buffer through the kernel type so generic

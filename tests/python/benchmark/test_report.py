@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from mkpp.benchmark.report import (
     derive_pairwise_comparison,
     read_raw_results,

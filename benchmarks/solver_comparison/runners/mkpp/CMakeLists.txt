@@ -7,7 +7,8 @@ set(TS1_ENVIRONMENT "${TS1_SOURCE_ROOT}/environment.yaml")
 # MKPP's path policy intentionally permits generated artifacts only beneath the source workspace. Do
 # not use CMAKE_CURRENT_BINARY_DIR here: controlled Docker builds commonly place it in /tmp outside
 # that policy boundary.
-set(MKPP_TS1_GENERATED_DIR "${CMAKE_SOURCE_DIR}/build/solver_comparison/generated_ts1"
+set(MKPP_TS1_GENERATED_DIR
+    "${CMAKE_SOURCE_DIR}/build/solver_comparison/generated_ts1"
     CACHE PATH "MKPP TS1 generated artifacts (must be inside the source workspace)")
 set(MKPP_TS1_GENERATED_HEADER "${MKPP_TS1_GENERATED_DIR}/ts1.hpp")
 
@@ -24,7 +25,7 @@ if(NOT TS1_CONFIG_SHA256 STREQUAL
   message(FATAL_ERROR "FATAL ERROR: pinned OpenAtmos TS1 configuration hash mismatch")
 endif()
 if(NOT TS1_ENVIRONMENT_SHA256 STREQUAL
-   "2c5206c7ded909f5c219b47e2eda5b03819c3993e9aaace8556862b5ff0a6995")
+   "adbc312e85057066169bdcf8a93758faefbc8d604e0ec4f3f88a7334e6d8caa3")
   message(FATAL_ERROR "FATAL ERROR: pinned OpenAtmos TS1 environment hash mismatch")
 endif()
 
@@ -32,8 +33,8 @@ endif()
 # artifact, not a second mechanism definition; --no-cache makes source/environment changes visible
 # immediately to generated chemistry.
 if(Python3_Interpreter_FOUND)
-  # The source list is deterministic: register generated outputs without
-  # executing the expensive generator during CMake configuration.
+  # The source list is deterministic: register generated outputs without executing the expensive
+  # generator during CMake configuration.
   set(MKPP_TS1_COMPILED_SOURCES)
   foreach(kernel IN ITEMS rates jacobian solve supernodal_factorize supernodal_solve)
     list(APPEND MKPP_TS1_COMPILED_SOURCES "${MKPP_TS1_GENERATED_DIR}/ts1/${kernel}.cpp")
@@ -42,14 +43,13 @@ if(Python3_Interpreter_FOUND)
        "${CMAKE_SOURCE_DIR}/src/mkpp/*.py" "${CMAKE_SOURCE_DIR}/src/mkpp/templates/*.j2")
   add_custom_command(
     OUTPUT "${MKPP_TS1_GENERATED_HEADER}" ${MKPP_TS1_COMPILED_SOURCES}
-    BYPRODUCTS
-      "${MKPP_TS1_GENERATED_DIR}/ts1/accessor.hpp"
-      "${MKPP_TS1_GENERATED_DIR}/ts1/host_declarations.hpp"
-      "${MKPP_TS1_GENERATED_DIR}/ts1/rates.hpp"
-      "${MKPP_TS1_GENERATED_DIR}/ts1/jacobian.hpp"
-      "${MKPP_TS1_GENERATED_DIR}/ts1/solve.hpp"
-      "${MKPP_TS1_GENERATED_DIR}/ts1/supernodal_factorize.hpp"
-      "${MKPP_TS1_GENERATED_DIR}/ts1/supernodal_solve.hpp"
+    BYPRODUCTS "${MKPP_TS1_GENERATED_DIR}/ts1/accessor.hpp"
+               "${MKPP_TS1_GENERATED_DIR}/ts1/host_declarations.hpp"
+               "${MKPP_TS1_GENERATED_DIR}/ts1/rates.hpp"
+               "${MKPP_TS1_GENERATED_DIR}/ts1/jacobian.hpp"
+               "${MKPP_TS1_GENERATED_DIR}/ts1/solve.hpp"
+               "${MKPP_TS1_GENERATED_DIR}/ts1/supernodal_factorize.hpp"
+               "${MKPP_TS1_GENERATED_DIR}/ts1/supernodal_solve.hpp"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${MKPP_TS1_GENERATED_DIR}"
     COMMAND
       "${CMAKE_COMMAND}" -E env "PYTHONPATH=${CMAKE_SOURCE_DIR}/src" "${Python3_EXECUTABLE}" -c
@@ -61,13 +61,15 @@ if(Python3_Interpreter_FOUND)
     VERBATIM)
   add_custom_target(mkpp_ts1_openatmos_binding DEPENDS "${MKPP_TS1_GENERATED_HEADER}")
 
-  mkpp_add_compiled_mechanism(mkpp_ts1_compiled_kernels "${MKPP_TS1_GENERATED_DIR}" ts1
-                              GENERATED SOURCES ${MKPP_TS1_COMPILED_SOURCES})
+  mkpp_add_compiled_mechanism(mkpp_ts1_compiled_kernels "${MKPP_TS1_GENERATED_DIR}" ts1 GENERATED
+                              SOURCES ${MKPP_TS1_COMPILED_SOURCES})
   add_dependencies(mkpp_ts1_compiled_kernels mkpp_ts1_openatmos_binding)
   target_compile_features(mkpp_ts1_compiled_kernels PRIVATE cxx_std_23)
 else()
-  message(FATAL_ERROR
-    "FATAL ERROR: Python is required to regenerate TS1 from pinned MUSICA v1 inputs; legacy fallback is not admitted")
+  message(
+    FATAL_ERROR
+      "FATAL ERROR: Python is required to regenerate TS1 from pinned MUSICA v1 inputs; legacy fallback is not admitted"
+  )
 endif()
 
 # The runner selects Chapman as well as TS1 through the host dispatcher.  Each selected generated

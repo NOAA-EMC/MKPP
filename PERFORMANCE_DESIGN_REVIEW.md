@@ -1,5 +1,7 @@
 # Performance design review
 
+The compact sparse forward path and heterogeneous-cell corrections are documented in [SCALING_OPTIMIZATION_REPORT.md](SCALING_OPTIMIZATION_REPORT.md). Dense workspace findings below describe the earlier implementation and the retained reference path.
+
 Subsequent native compilation and execution with Kokkos 5.1.1 are documented in [NATIVE_RUN_REPORT.md](NATIVE_RUN_REPORT.md). Earlier environment limitations below describe the review stage, not the later native run.
 
 **Verdict: the direction is reasonable, but the current implementation is not

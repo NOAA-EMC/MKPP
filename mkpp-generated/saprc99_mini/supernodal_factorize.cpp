@@ -1,5 +1,5 @@
-// Compiled supernodal factorization translation unit for saprc99_mini.
-// The portable LU plan lives in the shared device-callable fragment so a device
-// instantiation resolves factorize_plan inline; this unit keeps the compiled
-// static library pathway intact.
+// Generated saprc99_mini kernel definitions from the shared implementation.
+#if defined(MKPP_SEPARATE_HOST_KERNELS_SAPRC99_MINI)
+#define MKPP_DEFINE_HOST_KERNELS
+#endif
 #include "supernodal_factorize.hpp"

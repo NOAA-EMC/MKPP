@@ -26,7 +26,7 @@ from .template_context import build_template_context
 from .template_engine import TemplateEngine
 
 # Documented per-thread budget for the dense micro-matrix state (data-model E4, FR-007).
-# The integrator allocates three N x N double buffers per thread (J_values, W_values,
+# The reference integrator allocates three N x N double buffers (J_values, W_values,
 # LU_values). A mechanism whose footprint exceeds this budget must NOT keep them on the
 # per-thread stack for a device instantiation; the plan relocates them to team-scratch and
 # moves the symbolic L/U masks to device-accessible plan data. The budget is sized for the
@@ -41,19 +41,22 @@ def dense_matrix_bytes(num_species: int) -> int:
     return DENSE_MATRIX_BUFFERS * num_species * num_species * BYTES_PER_DOUBLE
 
 
-def per_thread_matrix_budget(num_species: int) -> dict:
+def per_thread_matrix_budget(num_species: int, compact_bytes: int | None = None) -> dict:
     """Evaluate the documented per-thread memory budget for a mechanism (data-model E4).
 
-    Returns a manifest-ready record describing the dense micro-matrix footprint and whether
+    Returns a manifest-ready record describing the selected numeric workspace and whether
     it exceeds the budget. Exceeding the budget emits a generation-time warning: the device
     instantiation must relocate {J,W,LU}_values to team-scratch and the L/U masks to a
     device-accessible View rather than per-thread stack arrays / per-TU inline masks.
     """
-    footprint = dense_matrix_bytes(num_species)
+    dense_footprint = dense_matrix_bytes(num_species)
+    footprint = dense_footprint if compact_bytes is None else compact_bytes
     exceeds = footprint > MAX_MATRIX_BYTES_PER_THREAD
     record = {
         "max_bytes_per_thread": MAX_MATRIX_BYTES_PER_THREAD,
-        "dense_matrix_bytes": footprint,
+        "dense_matrix_bytes": dense_footprint,
+        "numeric_matrix_bytes": footprint,
+        "storage": "dense-reference" if compact_bytes is None else "compact-sparse",
         "num_species": num_species,
         "buffers": DENSE_MATRIX_BUFFERS,
         "exceeds_budget": exceeds,
@@ -140,10 +143,10 @@ def generate_headers(
     context = build_template_context(mech, solver_name, adjoint=True, simd_backend=simd_backend)
     # Add suffix to context for filename generation
     context["suffix"] = suffix
-    # Documented per-thread dense micro-matrix budget (data-model E4, FR-007). Evaluated at
+    # Documented per-thread numeric matrix budget (data-model E4, FR-007). Evaluated at
     # generation time so a mechanism exceeding the budget surfaces a warning and a manifest
     # record driving the device team-scratch relocation plan (research R5).
-    budget_record = per_thread_matrix_budget(context["num_species"])
+    budget_record = per_thread_matrix_budget(context["num_species"], context["compact"]["numeric_bytes"])
     # The public header includes the reference factorization fragment only when
     # the unrolled-reference backend is emitted, keeping the default artifact
     # set free of the benchmark-only algebra.

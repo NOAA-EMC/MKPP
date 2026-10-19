@@ -145,7 +145,7 @@ def format_eqn(
             # M_density is used only when a mechanism has no explicit AIR or
             # M species. It must come from the supplied compilation
             # environment, never from a unit-specific legacy constant.
-            sp.Symbol("M_density"): air_density,
+            sp.Symbol("M_density"): sp.Symbol("AirDensity") if keep_env_symbols else air_density,
         }
 
         # When keep_env_symbols is False (default), substitute environmental
@@ -159,6 +159,9 @@ def format_eqn(
             subs_dict[sp.Symbol("temp")] = temperature
             subs_dict[sp.Symbol("Temp")] = temperature
 
+        if keep_env_symbols:
+            subs_dict[sp.Symbol("TEMP")] = sp.Symbol("Temp")
+            subs_dict[sp.Symbol("temp")] = sp.Symbol("Temp")
         expr = expr.subs(subs_dict)
         s = sp.ccode(expr)
         s = _fold_numeric_falloff_powers(s)

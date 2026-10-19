@@ -1,5 +1,5 @@
-// Compiled Jacobian translation unit for saprc99_mini.
-// The algebra lives in the shared device-callable fragment so host and device
-// build from one source of truth; this unit keeps the compiled static library
-// pathway intact for consumers that link it instead of including the header.
+// Generated saprc99_mini kernel definitions from the shared implementation.
+#if defined(MKPP_SEPARATE_HOST_KERNELS_SAPRC99_MINI)
+#define MKPP_DEFINE_HOST_KERNELS
+#endif
 #include "jacobian.hpp"

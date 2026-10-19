@@ -78,7 +78,6 @@ def test_paired_pilot_rechecks_every_solver_at_the_final_common_count():
 
 def test_paired_pilot_rejects_missing_or_changed_subjects():
     import pytest
-
     from mkpp.benchmark.sampling import paired_repetition_count
 
     with pytest.raises(ValueError, match="subject identities"):

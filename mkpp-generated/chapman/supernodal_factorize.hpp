@@ -1,34 +1,41 @@
 #pragma once
 #include <Kokkos_Core.hpp>
 namespace mkpp::generated::chapman::detail {
-KOKKOS_INLINE_FUNCTION void factorize_plan(const double* w, double* lu) {
-  constexpr int N = 4;
-  static constexpr unsigned char L[N * N] = {
-    0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0
+#if defined(MKPP_DEFINE_HOST_KERNELS)
+void
+#else
+KOKKOS_INLINE_FUNCTION void
+#endif
+factorize_plan(const double* w, double* lu) {
+  struct Operation { int output, input, begin, end, diagonal; };
+  struct Product { int left, right; };
+  static constexpr Operation operations[] = {
+    { 0, 0, 0, 0, -1 },
+    { 1, 1, 0, 0, 0 },
+    { 5, 5, 0, 0, 0 },
+    { 9, 9, 0, 0, 0 },
+    { 2, 2, 0, 0, -1 },
+    { 3, 3, 0, 0, -1 },
+    { 4, 4, 0, 0, -1 },
+    { 6, 6, 0, 0, 2 },
+    { 10, 10, 0, 0, 2 },
+    { 7, 7, 0, 1, -1 },
+    { 8, 8, 1, 2, -1 },
+    { 11, 11, 2, 3, 7 },
+    { 12, 12, 3, 5, -1 },
   };
-  static constexpr unsigned char U[N * N] = {
-    1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1
+  static constexpr Product products[] = {
+    { 6, 3 },
+    { 6, 4 },
+    { 10, 3 },
+    { 10, 4 },
+    { 11, 8 },
   };
-  for (int row = 0; row < N; ++row)
-    for (int column = 0; column < N; ++column)
-      lu[row * N + column] = 0.0;
-  for (int row = 0; row < N; ++row) {
-    for (int column = row; column < N; ++column) {
-      if (!U[row * N + column]) continue;
-      double value = w[row * N + column];
-      for (int inner = 0; inner < row; ++inner)
-        if (L[row * N + inner] && U[inner * N + column])
-          value -= lu[row * N + inner] * lu[inner * N + column];
-      lu[row * N + column] = value;
-    }
-    for (int lower_row = row + 1; lower_row < N; ++lower_row) {
-      if (!L[lower_row * N + row]) continue;
-      double value = w[lower_row * N + row];
-      for (int inner = 0; inner < row; ++inner)
-        if (L[lower_row * N + inner] && U[inner * N + row])
-          value -= lu[lower_row * N + inner] * lu[inner * N + row];
-      lu[lower_row * N + row] = value / lu[row * N + row];
-    }
+  for (const auto& op : operations) {
+    double value = op.input >= 0 ? w[op.input] : 0.0;
+    for (int product = op.begin; product < op.end; ++product)
+      value -= lu[products[product].left] * lu[products[product].right];
+    lu[op.output] = op.diagonal >= 0 ? value / lu[op.diagonal] : value;
   }
 }
 }  // namespace mkpp::generated::chapman::detail

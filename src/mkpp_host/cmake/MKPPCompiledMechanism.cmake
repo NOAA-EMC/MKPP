@@ -21,8 +21,8 @@ function(mkpp_add_compiled_mechanism target generated_dir mechanism)
       "${generated_dir}/${mechanism}/solve.cpp"
       "${generated_dir}/${mechanism}/supernodal_factorize.cpp"
       "${generated_dir}/${mechanism}/supernodal_solve.cpp")
-    # The unrolled reference factorization is emitted only with the reference backend flag, so include
-    # its translation unit when present.
+    # The unrolled reference factorization is emitted only with the reference backend flag, so
+    # include its translation unit when present.
     if(EXISTS "${generated_dir}/${mechanism}/factorize.cpp")
       list(APPEND mechanism_sources "${generated_dir}/${mechanism}/factorize.cpp")
     endif()
@@ -35,11 +35,14 @@ function(mkpp_add_compiled_mechanism target generated_dir mechanism)
 
   add_library(${target} STATIC ${mechanism_sources})
   target_compile_features(${target} PUBLIC cxx_std_23)
-  # Separate CPU definitions avoid repeated O3 optimization in every consumer.
-  # Device backends keep visible inline definitions (no new RDC requirement).
+  # Separate CPU definitions avoid repeated O3 optimization in every consumer. Device backends keep
+  # visible inline definitions (no new RDC requirement).
   if(MKPP_SEPARATE_HOST_KERNELS
-     AND NOT (Kokkos_ENABLE_CUDA OR Kokkos_ENABLE_HIP OR Kokkos_ENABLE_SYCL
-              OR Kokkos_ENABLE_OPENACC)
+     AND NOT
+         (Kokkos_ENABLE_CUDA
+          OR Kokkos_ENABLE_HIP
+          OR Kokkos_ENABLE_SYCL
+          OR Kokkos_ENABLE_OPENACC)
      AND (MKPP_MECH_GENERATED OR EXISTS "${generated_dir}/${mechanism}/host_declarations.hpp"))
     string(TOUPPER "${mechanism}" mechanism_macro)
     target_compile_definitions(${target} PUBLIC "MKPP_SEPARATE_HOST_KERNELS_${mechanism_macro}")

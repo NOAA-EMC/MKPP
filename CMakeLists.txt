@@ -79,9 +79,11 @@ option(MKPP_ENABLE_SOLVER_COMPARISON "Build governed MICM, KPP, and MKPP compari
 
 if(MKPP_ENABLE_MICM_COMPARE OR MKPP_ENABLE_SOLVER_COMPARISON)
   if(MKPP_ENABLE_SOLVER_COMPARISON)
-    # The primary comparison uses binary64. MUSICA v1 phase properties can
-    # contain finite values (e.g. 1e300) that binary32 cannot represent.
-    set(MICM_USE_DOUBLE ON CACHE BOOL "Use binary64 for governed solver comparisons" FORCE)
+    # The primary comparison uses binary64. MUSICA v1 phase properties can contain finite values
+    # (e.g. 1e300) that binary32 cannot represent.
+    set(MICM_USE_DOUBLE
+        ON
+        CACHE BOOL "Use binary64 for governed solver comparisons" FORCE)
   endif()
   set(CMAKE_CXX_STANDARD
       20

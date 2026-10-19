@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from mkpp.benchmark.openatmos import require_openatmos_v1
 from mkpp.benchmark.schema import SchemaValidationError
 
