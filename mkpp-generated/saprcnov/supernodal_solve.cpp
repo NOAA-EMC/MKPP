@@ -1,4 +1,5 @@
-// Compiled supernodal solve translation unit for saprcnov.
-// The portable forward/backward solve lives in the shared device-callable
-// fragment; this unit keeps the compiled static library pathway intact.
+// Generated saprcnov kernel definitions from the shared implementation.
+#if defined(MKPP_SEPARATE_HOST_KERNELS_SAPRCNOV)
+#define MKPP_DEFINE_HOST_KERNELS
+#endif
 #include "supernodal_solve.hpp"

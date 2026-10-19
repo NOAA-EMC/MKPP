@@ -1,7 +1,12 @@
 #pragma once
 #include <Kokkos_Core.hpp>
 namespace mkpp::generated::carbon::detail {
-KOKKOS_INLINE_FUNCTION void solve_lu(const double* lu, const double* rhs, double* solution) {
+#if defined(MKPP_DEFINE_HOST_KERNELS)
+void
+#else
+KOKKOS_INLINE_FUNCTION void
+#endif
+solve_lu(const double* lu, const double* rhs, double* solution) {
   constexpr int N = 11;
   double work[N];
   work[0] = rhs[0];

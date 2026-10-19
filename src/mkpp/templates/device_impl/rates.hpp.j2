@@ -1,25 +1,23 @@
-{#
-  Device-callable implementation fragment: rate-of-change chunks.
-
-  Emits every compiled rate chunk as a KOKKOS_INLINE_FUNCTION definition inside
-  the mechanism's detail namespace. The public header and the thin rates.cpp
-  translation unit both include this single source of truth, so a device
-  instantiation of SolverKernels sees inline bodies (no host-only out-of-line
-  symbol) while the compiled static library keeps providing the same algebra.
-
-  Context: mechanism_name, compiled_rate_chunks, has_equilibrium, has_cloud_gated
+{# Shared algebra: inline and device-callable by default; emitted out of line
+   when MKPP_DEFINE_HOST_KERNELS is set by a separate CPU implementation unit.
 #}
 #pragma once
 #include <Kokkos_Core.hpp>
 #include "accessor.hpp"
 namespace mkpp::generated::{{ mechanism_name }}::detail {
 {% for expressions in compiled_rate_chunks %}
-KOKKOS_INLINE_FUNCTION void compute_rates_chunk_{{ loop.index0 }}(
+#if defined(MKPP_DEFINE_HOST_KERNELS)
+void
+#else
+KOKKOS_INLINE_FUNCTION void
+#endif
+compute_rates_chunk_{{ loop.index0 }}(
   StrideView<const double, 1> state, StrideView<double, 1> rates,
-    const double* jvals, double temp, double rh{% if has_cloud_gated %}, double clw{% endif %}) {
-{% if has_equilibrium %}
+    const double* jvals, double temp, double rh{% if has_cloud_gated %}, double clw{% endif %}, double air_density) {
+{% if has_runtime_environment %}
   const double Temp = temp;
   const double RH = rh;
+  const double AirDensity = air_density;
   (void)RH;
 {% if has_cloud_gated %}
   const double CLW = clw;
@@ -28,6 +26,7 @@ KOKKOS_INLINE_FUNCTION void compute_rates_chunk_{{ loop.index0 }}(
 {% else %}
   (void)temp;
   (void)rh;
+  (void)air_density;
 {% endif %}
 {% for expression in expressions %}
   rates({{ expression.index }}) = {{ expression.expr }};

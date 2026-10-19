@@ -1,16 +1,17 @@
 #pragma once
 #include <Kokkos_Core.hpp>
-// The expression-dense rate/Jacobian chunks and the sparse LU plan are emitted
-// as KOKKOS_INLINE_FUNCTION definitions in per-kernel implementation fragments.
-// Including them here means a device instantiation of SolverKernels resolves the
-// entire call chain to inline device-callable bodies; the compiled translation
-// units include the same fragments, so host and device share one source of truth.
+// CPU libraries can own the heavy helper definitions. Device builds keep the
+// complete device-callable implementation visible without relocatable device code.
+#if defined(MKPP_SEPARATE_HOST_KERNELS_CHAPMAN)
+#include "chapman/host_declarations.hpp"
+#else
 #include "chapman/accessor.hpp"
 #include "chapman/rates.hpp"
 #include "chapman/jacobian.hpp"
 #include "chapman/supernodal_factorize.hpp"
 #include "chapman/supernodal_solve.hpp"
 #include "chapman/solve.hpp"
+#endif
 // Generated solver for chapman
 // SZA Workload Sorted: true
 // Hysteresis/Spline Continuous Transition: true
@@ -48,6 +49,9 @@ namespace mkpp::generated::chapman {
   template<typename DeviceType>
   struct SolverKernels {
       using memory_space = typename DeviceType::memory_space;
+      static constexpr bool SUPPORTS_RUNTIME_ENVIRONMENT = false;
+      static constexpr int NUM_RUNTIME_PARAMETERS = 2;
+      static constexpr bool HAS_CLOUD_GATED = false;
 #ifdef MKPP_ENABLE_ADJOINT
       // Expose the checkpoint buffer through the kernel type so generic
       // device-path callers can name it without the mechanism namespace.
@@ -67,7 +71,7 @@ namespace mkpp::generated::chapman {
           const double* jvals = jvals_view.data();
               const auto state_accessor = detail::make_stride_view(state);
               const auto rates_accessor = detail::make_stride_view(F_block);
-              detail::compute_rates_chunk_0(state_accessor, rates_accessor, jvals, 0.0, 0.0);
+              detail::compute_rates_chunk_0(state_accessor, rates_accessor, jvals, 0.0, 0.0, 2.46e+19);
       }
 
       /**
@@ -84,7 +88,7 @@ namespace mkpp::generated::chapman {
           const double* jvals = jvals_view.data();
               const auto state_accessor = detail::make_stride_view(state);
               const auto jacobian_accessor = detail::make_stride_view(J_block);
-              detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, 0.0, 0.0);
+              detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, 0.0, 0.0, 2.46e+19);
       }
 
 #ifdef MKPP_ENABLE_ADJOINT
@@ -209,9 +213,30 @@ namespace mkpp::generated::chapman {
           const double S_3 = state(Species::O2);  // [O2]
           // The expression-dense Jacobian is evaluated by bounded compiled
           // units.  The solver still uses the same symbolic sparse LU plan.
+#ifndef MKPP_USE_UNROLLED_REFERENCE
+          double J_values[12] = {};
+          auto jacobian_accessor = detail::StrideView<double, 2>::compact(J_values);
+          detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, 0.0, 0.0, 2.46e+19);
+          double W_values[13];
+          W_values[0] = inv_g_dt;
+          W_values[1] = 0.0 - J_values[11];
+          W_values[2] = inv_g_dt - J_values[10];
+          W_values[3] = 0.0 - J_values[8];
+          W_values[4] = 0.0 - J_values[9];
+          W_values[5] = 0.0 - J_values[3];
+          W_values[6] = 0.0 - J_values[2];
+          W_values[7] = inv_g_dt - J_values[0];
+          W_values[8] = 0.0 - J_values[1];
+          W_values[9] = 0.0 - J_values[7];
+          W_values[10] = 0.0 - J_values[6];
+          W_values[11] = 0.0 - J_values[4];
+          W_values[12] = inv_g_dt - J_values[5];
+          double LU_values[13];
+          detail::factorize_plan(W_values, LU_values);
+#else
           double J_values[NUM_SPECIES * NUM_SPECIES] = {};
           auto jacobian_accessor = detail::make_stride_view<double, 2>(J_values, NUM_SPECIES, 1);
-          detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, 0.0, 0.0);
+          detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, 0.0, 0.0, 2.46e+19);
           // Analytical Jacobian & Iteration Matrix W = inv_g_dt*I - J (sparse)
           double J_1_0 = J_values[2 * NUM_SPECIES + 3];
           double J_1_1 = J_values[2 * NUM_SPECIES + 2];
@@ -240,9 +265,6 @@ namespace mkpp::generated::chapman {
           W_values[3 * NUM_SPECIES + 2] = -J_3_2;
           W_values[3 * NUM_SPECIES + 3] = inv_g_dt - J_3_3;
           double LU_values[NUM_SPECIES * NUM_SPECIES] = {};
-#ifndef MKPP_USE_UNROLLED_REFERENCE
-          detail::factorize_plan(W_values, LU_values);
-#else
           detail::factorize_lu_chunk_0(W_values, LU_values);
 #endif
 
@@ -250,7 +272,7 @@ namespace mkpp::generated::chapman {
           // Rate evaluation F1 at S
           double F_values_1[NUM_SPECIES];
           auto rate_accessor_1 = detail::make_stride_view<double, 1>(F_values_1, 1);
-          detail::compute_rates_chunk_0(state_accessor, rate_accessor_1, jvals, 0.0, 0.0);
+          detail::compute_rates_chunk_0(state_accessor, rate_accessor_1, jvals, 0.0, 0.0, 2.46e+19);
           double F1_0 = F_values_1[3];
           double F1_1 = F_values_1[2];
           double F1_2 = F_values_1[0];
@@ -286,7 +308,7 @@ namespace mkpp::generated::chapman {
           double F_values_2[NUM_SPECIES];
           auto rate_accessor_2 = detail::make_stride_view<double, 1>(F_values_2, 1);
           auto stage_state_accessor_2 = detail::make_stride_view<double, 1>(stage_state_2, 1);
-          detail::compute_rates_chunk_0(stage_state_accessor_2, rate_accessor_2, jvals, 0.0, 0.0);
+          detail::compute_rates_chunk_0(stage_state_accessor_2, rate_accessor_2, jvals, 0.0, 0.0, 2.46e+19);
           double F2_0 = F_values_2[3];
           double F2_1 = F_values_2[2];
           double F2_2 = F_values_2[0];

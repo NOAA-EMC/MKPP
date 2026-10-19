@@ -2,11 +2,17 @@
 #include <Kokkos_Core.hpp>
 #include "accessor.hpp"
 namespace mkpp::generated::gocart::detail {
-KOKKOS_INLINE_FUNCTION void compute_rates_chunk_0(
+#if defined(MKPP_DEFINE_HOST_KERNELS)
+void
+#else
+KOKKOS_INLINE_FUNCTION void
+#endif
+compute_rates_chunk_0(
   StrideView<const double, 1> state, StrideView<double, 1> rates,
-    const double* jvals, double temp, double rh, double clw) {
+    const double* jvals, double temp, double rh, double clw, double air_density) {
   const double Temp = temp;
   const double RH = rh;
+  const double AirDensity = air_density;
   (void)RH;
   const double CLW = clw;
   (void)CLW;  // Referenced only by the gated reaction's chunk.

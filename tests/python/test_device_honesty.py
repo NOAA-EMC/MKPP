@@ -72,12 +72,9 @@ def test_auxiliary_engines_are_honestly_host_confined() -> None:
     annotated = [
         line
         for line in impl.splitlines()
-        if re.search(r"\bKOKKOS_INLINE_FUNCTION\b", line)
-        and not line.lstrip().startswith(("//", "///"))
+        if re.search(r"\bKOKKOS_INLINE_FUNCTION\b", line) and not line.lstrip().startswith(("//", "///"))
     ]
-    assert annotated == [], (
-        "auxiliary functor bodies must not be KOKKOS_INLINE_FUNCTION"
-    )
+    assert annotated == [], "auxiliary functor bodies must not be KOKKOS_INLINE_FUNCTION"
 
     # 2. Dispatch is structurally pinned to the host execution space.
     assert "DefaultHostExecutionSpace" in header
@@ -96,9 +93,6 @@ def test_auxiliary_engines_are_honestly_host_confined() -> None:
     # 5. The engine symbols carry no aspirational device suffix (code lines;
     # comments may explain why they must not).
     device_named = [
-        line
-        for line in impl.splitlines()
-        if re.search(r"\w+_device\b", line)
-        and not line.lstrip().startswith(("//", "///"))
+        line for line in impl.splitlines() if re.search(r"\w+_device\b", line) and not line.lstrip().startswith(("//", "///"))
     ]
     assert device_named == []

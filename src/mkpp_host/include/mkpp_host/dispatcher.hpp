@@ -1,8 +1,13 @@
 #pragma once
 #include <Kokkos_Core.hpp>
 
+#if KOKKOS_VERSION < 50101
+#error "MKPP requires Kokkos 5.1.1 or newer"
+#endif
+
 #include <iostream>
 #include <string>
+#include <stdexcept>
 
 namespace mkpp {
 namespace host {
@@ -71,24 +76,43 @@ inline JvalsView<MemorySpace> resolve_jvals(const JvalsView<MemorySpace>& jvals,
 }  // namespace detail
 
 /// @brief Runtime execution parameters for host integration dispatch.
-struct HostExecutionParams {
-    using memory_space = Kokkos::DefaultExecutionSpace::memory_space;
+template <typename MemorySpace>
+struct BasicHostExecutionParams {
+    using memory_space = MemorySpace;
 
     double dt{60.0};                        ///< Integration timestep size in seconds
     JvalsView<memory_space> jvals{};        ///< Cloud-J photolysis rates in the active memory space
     double temp{288.15};                    ///< Temperature in Kelvin (used for mechanisms like GOCART)
+    double air_density{2.4476e19};
+    Kokkos::View<const double*, memory_space> cell_temperature;
+    Kokkos::View<const double*, memory_space> cell_humidity;
+    Kokkos::View<const double*, memory_space> cell_density;
+    Kokkos::View<const double*, memory_space> cell_cloud_water;
+    Kokkos::View<const double**, Kokkos::LayoutStride, memory_space> cell_jvals;
     double rh{0.5};                         ///< Relative humidity fraction (used for mechanisms like GOCART)
     double clw{0.0};                        ///< Cloud liquid water fraction (used by cloud-gated mechanisms)
     int steps{1};                           ///< Number of integration timesteps
     std::size_t jvals_extent{512};          ///< Fallback photolysis array size when none is supplied
 };
 
+using HostExecutionParams = BasicHostExecutionParams<Kokkos::DefaultExecutionSpace::memory_space>;
+
 /// @brief Helper trait function invoking solver integration with matching argument signature.
-template <typename SolverKernelsType, typename SubStateView>
+template <typename SolverKernelsType, typename SubStateView, typename ParamsType>
 KOKKOS_INLINE_FUNCTION void integrate_cell(SolverKernelsType& solver,
-                                           const HostExecutionParams& params,
+                                           const ParamsType& params,
                                            SubStateView sub_state) {
-    if constexpr (requires { solver.integrate(params.dt, sub_state, params.jvals, params.temp, params.rh, params.clw); }) {
+    if constexpr (requires { SolverKernelsType::SUPPORTS_RUNTIME_ENVIRONMENT; }) {
+        if constexpr (SolverKernelsType::SUPPORTS_RUNTIME_ENVIRONMENT) {
+            if constexpr (SolverKernelsType::HAS_CLOUD_GATED) {
+                solver.integrate(params.dt, sub_state, params.jvals, params.temp, params.rh, params.clw, params.air_density);
+            } else {
+                solver.integrate(params.dt, sub_state, params.jvals, params.temp, params.rh, params.air_density);
+            }
+        } else {
+            solver.integrate(params.dt, sub_state, params.jvals);
+        }
+    } else if constexpr (requires { solver.integrate(params.dt, sub_state, params.jvals, params.temp, params.rh, params.clw); }) {
         solver.integrate(params.dt, sub_state, params.jvals, params.temp, params.rh, params.clw);
     } else if constexpr (requires { solver.integrate(params.dt, sub_state, params.jvals, params.temp, params.rh); }) {
         solver.integrate(params.dt, sub_state, params.jvals, params.temp, params.rh);
@@ -172,28 +196,59 @@ struct TiledCellTimeIntegrator {
 template <typename SolverKernelsType, typename StateViewType>
 struct ParamsTiledCellIntegrator {
     StateViewType m_state;
-    HostExecutionParams m_params;
+    using ParamsType = BasicHostExecutionParams<typename StateViewType::memory_space>;
+    ParamsType m_params;
 
-    ParamsTiledCellIntegrator(StateViewType s, const HostExecutionParams& params)
+    ParamsTiledCellIntegrator(StateViewType s, const ParamsType& params)
         : m_state(s), m_params(params) {
         // Normalise a caller-supplied empty photolysis view to the shared
         // zero-filled array once, at the host launch boundary, so device code
         // never allocates or branches on null.
         m_params.jvals = detail::resolve_jvals(m_params.jvals, m_params.jvals_extent);
+        const auto cells = m_state.extent(0);
+        for (const auto extent : {m_params.cell_temperature.extent(0), m_params.cell_humidity.extent(0),
+                                  m_params.cell_density.extent(0), m_params.cell_cloud_water.extent(0)}) {
+            if (extent != 0 && extent != cells)
+                throw std::invalid_argument("FATAL ERROR: per-cell meteorology extent does not match state");
+        }
+        if (m_params.cell_jvals.extent(0) != 0 && m_params.cell_jvals.extent(0) != cells)
+            throw std::invalid_argument("FATAL ERROR: per-cell forcing extent does not match state");
+        if constexpr (requires { SolverKernelsType::NUM_RUNTIME_PARAMETERS; }) {
+            if (m_params.cell_jvals.extent(0) != 0 &&
+                m_params.cell_jvals.extent(1) < SolverKernelsType::NUM_RUNTIME_PARAMETERS)
+                throw std::invalid_argument("FATAL ERROR: per-cell forcing has too few runtime parameters");
+        }
+
     }
 
     KOKKOS_INLINE_FUNCTION
     void operator()(const int cell_idx) const {
         SolverKernelsType solver;
+        auto params = m_params;
+        if (params.cell_temperature.extent(0)) params.temp = params.cell_temperature(cell_idx);
+        if (params.cell_humidity.extent(0)) params.rh = params.cell_humidity(cell_idx);
+        if (params.cell_density.extent(0)) params.air_density = params.cell_density(cell_idx);
+        if (params.cell_cloud_water.extent(0)) params.clw = params.cell_cloud_water(cell_idx);
+        constexpr int parameter_count = [] {
+            if constexpr (requires { SolverKernelsType::NUM_RUNTIME_PARAMETERS; })
+                return SolverKernelsType::NUM_RUNTIME_PARAMETERS > 0 ? SolverKernelsType::NUM_RUNTIME_PARAMETERS : 1;
+            else return 1024;
+        }();
+        double forcing[parameter_count];
+        if (params.cell_jvals.extent(0) && params.cell_jvals.extent(1)) {
+            for (int slot = 0; slot < parameter_count; ++slot)
+                forcing[slot] = params.cell_jvals(cell_idx, slot);
+            params.jvals = JvalsView<typename StateViewType::memory_space>(forcing, parameter_count);
+        }
         if constexpr (StateViewType::rank() == 4) {
             auto sub_state = Kokkos::subview(m_state, cell_idx, Kokkos::ALL(), 0, 0);
             for (int step = 0; step < m_params.steps; ++step) {
-                integrate_cell(solver, m_params, sub_state);
+                integrate_cell(solver, params, sub_state);
             }
         } else {
             auto sub_state = Kokkos::subview(m_state, cell_idx, Kokkos::ALL());
             for (int step = 0; step < m_params.steps; ++step) {
-                integrate_cell(solver, m_params, sub_state);
+                integrate_cell(solver, params, sub_state);
             }
         }
     }
@@ -342,6 +397,7 @@ struct mkpp_handle_impl {
     std::size_t num_species{0};
     std::size_t num_reactions{0};
     std::size_t num_photolysis{0};
+    std::size_t num_rate_parameters{0};
     bool is_initialized{false};
 
     // Unmanaged 2D view over host model species concentrations (num_cells, num_species)
@@ -354,11 +410,11 @@ struct mkpp_handle_impl {
     Kokkos::View<double*, Kokkos::LayoutLeft, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> relative_humidity;
     Kokkos::View<double*, Kokkos::LayoutLeft, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> aerosol_surface_area;
 
+    Kokkos::View<double*, Kokkos::LayoutLeft, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> cloud_water;
+
     // Unmanaged 2D view over host model photolysis rates (num_cells, num_photolysis)
     Kokkos::View<double**, Kokkos::LayoutLeft, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> photolysis_rates;
 
-    // Allocated scratch workspace memory for internal solver calculations
-    Kokkos::View<double**, Kokkos::LayoutLeft> workspace_scratch;
 
     // Human-readable error diagnostic message for last failure
     std::string last_error_msg;

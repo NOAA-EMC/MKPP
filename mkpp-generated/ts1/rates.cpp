@@ -1,5 +1,5 @@
-// Compiled rate-of-change translation unit for ts1.
-// The algebra lives in the shared device-callable fragment so host and device
-// build from one source of truth; this unit keeps the compiled static library
-// pathway intact for consumers that link it instead of including the header.
+// Generated ts1 kernel definitions from the shared implementation.
+#if defined(MKPP_SEPARATE_HOST_KERNELS_TS1)
+#define MKPP_DEFINE_HOST_KERNELS
+#endif
 #include "rates.hpp"

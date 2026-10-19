@@ -1,16 +1,17 @@
 #pragma once
 #include <Kokkos_Core.hpp>
-// The expression-dense rate/Jacobian chunks and the sparse LU plan are emitted
-// as KOKKOS_INLINE_FUNCTION definitions in per-kernel implementation fragments.
-// Including them here means a device instantiation of SolverKernels resolves the
-// entire call chain to inline device-callable bodies; the compiled translation
-// units include the same fragments, so host and device share one source of truth.
+// CPU libraries can own the heavy helper definitions. Device builds keep the
+// complete device-callable implementation visible without relocatable device code.
+#if defined(MKPP_SEPARATE_HOST_KERNELS_GOCART)
+#include "gocart/host_declarations.hpp"
+#else
 #include "gocart/accessor.hpp"
 #include "gocart/rates.hpp"
 #include "gocart/jacobian.hpp"
 #include "gocart/supernodal_factorize.hpp"
 #include "gocart/supernodal_solve.hpp"
 #include "gocart/solve.hpp"
+#endif
 // Generated solver for gocart
 // SZA Workload Sorted: true
 // Hysteresis/Spline Continuous Transition: true
@@ -79,6 +80,9 @@ namespace mkpp::generated::gocart {
   template<typename DeviceType>
   struct SolverKernels {
       using memory_space = typename DeviceType::memory_space;
+      static constexpr bool SUPPORTS_RUNTIME_ENVIRONMENT = true;
+      static constexpr int NUM_RUNTIME_PARAMETERS = 1;
+      static constexpr bool HAS_CLOUD_GATED = true;
 #ifdef MKPP_ENABLE_ADJOINT
       // Expose the checkpoint buffer through the kernel type so generic
       // device-path callers can name it without the mechanism namespace.
@@ -94,11 +98,11 @@ namespace mkpp::generated::gocart {
        * @param jvals Array of photolysis rate constants [NUM_PHOTOLYSIS].
        */
       template <class StateView, class RateView>
-      KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, Kokkos::View<const double*, memory_space> jvals_view, const double temp, const double rh, const double clw) const {
+      KOKKOS_INLINE_FUNCTION void compute_rates(const StateView& state, RateView& F_block, Kokkos::View<const double*, memory_space> jvals_view, const double temp = 298.15, const double rh = 0.5, const double clw = 0.0, const double air_density = 2.46e+19) const {
           const double* jvals = jvals_view.data();
               const auto state_accessor = detail::make_stride_view(state);
               const auto rates_accessor = detail::make_stride_view(F_block);
-              detail::compute_rates_chunk_0(state_accessor, rates_accessor, jvals, temp, rh, clw);
+              detail::compute_rates_chunk_0(state_accessor, rates_accessor, jvals, temp, rh, clw, air_density);
       }
 
       /**
@@ -111,19 +115,20 @@ namespace mkpp::generated::gocart {
        * @param jvals Array of photolysis rate constants [NUM_PHOTOLYSIS].
        */
       template <class StateView, class JacView>
-      KOKKOS_INLINE_FUNCTION void compute_jacobian(const StateView& state, JacView& J_block, Kokkos::View<const double*, memory_space> jvals_view, const double temp, const double rh, const double clw) const {
+      KOKKOS_INLINE_FUNCTION void compute_jacobian(const StateView& state, JacView& J_block, Kokkos::View<const double*, memory_space> jvals_view, const double temp = 298.15, const double rh = 0.5, const double clw = 0.0, const double air_density = 2.46e+19) const {
           const double* jvals = jvals_view.data();
               const auto state_accessor = detail::make_stride_view(state);
               const auto jacobian_accessor = detail::make_stride_view(J_block);
-              detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, temp, rh, clw);
+              detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, temp, rh, clw, air_density);
       }
 
 #ifdef MKPP_ENABLE_ADJOINT
       template <class StateView, class JacView>
-      KOKKOS_INLINE_FUNCTION void compute_adjoint(const StateView& state, JacView& J_adj_block, Kokkos::View<const double*, memory_space> jvals_view, const double temp, const double rh, const double clw) const {
+      KOKKOS_INLINE_FUNCTION void compute_adjoint(const StateView& state, JacView& J_adj_block, Kokkos::View<const double*, memory_space> jvals_view, const double temp = 298.15, const double rh = 0.5, const double clw = 0.0, const double air_density = 2.46e+19) const {
           const double* jvals = jvals_view.data();
           const double Temp = temp;
           const double RH = rh;
+          const double AirDensity = air_density;
           (void)RH;  // Reserved for future deliquescence modeling
           const double CLW = clw;
           // --- Sparse Analytical Adjoint Jacobian Entries J_adj_block(i, j) = J^T(i, j) ---
@@ -354,10 +359,11 @@ namespace mkpp::generated::gocart {
 
 #ifdef MKPP_ENABLE_ADJOINT
       template <class StateView, class DeltaView, class RateView>
-      KOKKOS_INLINE_FUNCTION void compute_tlm(const StateView& state, const DeltaView& delta_C, RateView& dF_block, Kokkos::View<const double*, memory_space> jvals_view, const double temp, const double rh, const double clw) const {
+      KOKKOS_INLINE_FUNCTION void compute_tlm(const StateView& state, const DeltaView& delta_C, RateView& dF_block, Kokkos::View<const double*, memory_space> jvals_view, const double temp = 298.15, const double rh = 0.5, const double clw = 0.0, const double air_density = 2.46e+19) const {
           const double* jvals = jvals_view.data();
           const double Temp = temp;
           const double RH = rh;
+          const double AirDensity = air_density;
           (void)RH;  // Reserved for future deliquescence modeling
           const double CLW = clw;
           dF_block(0) = 0.0;
@@ -583,10 +589,11 @@ namespace mkpp::generated::gocart {
        * @param jvals Array of photolysis rate constants [NUM_PHOTOLYSIS].
        */
       template <class StateView>
-      KOKKOS_INLINE_FUNCTION void integrate(double dt_total, StateView& state, Kokkos::View<const double*, memory_space> jvals_view, const double temp, const double rh, const double clw) const {
+      KOKKOS_INLINE_FUNCTION void integrate(double dt_total, StateView& state, Kokkos::View<const double*, memory_space> jvals_view, const double temp = 298.15, const double rh = 0.5, const double clw = 0.0, const double air_density = 2.46e+19) const {
           const double* jvals = jvals_view.data();
           const double Temp = temp;
           const double RH = rh;
+          const double AirDensity = air_density;
           (void)RH;  // Reserved for future deliquescence modeling
           const double CLW = clw;
           (void)CLW;  // Referenced by the gated reaction's compiled chunks.
@@ -640,9 +647,141 @@ namespace mkpp::generated::gocart {
           const double S_25 = state(Species::NO3);  // [NO3]
           // The expression-dense Jacobian is evaluated by bounded compiled
           // units.  The solver still uses the same symbolic sparse LU plan.
+#ifndef MKPP_USE_UNROLLED_REFERENCE
+          double J_values[111] = {};
+          auto jacobian_accessor = detail::StrideView<double, 2>::compact(J_values);
+          detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, temp, rh, clw, air_density);
+          double W_values[124];
+          W_values[0] = inv_g_dt - J_values[41];
+          W_values[1] = 0.0 - J_values[42];
+          W_values[2] = inv_g_dt;
+          W_values[3] = inv_g_dt - J_values[39];
+          W_values[4] = 0.0 - J_values[40];
+          W_values[5] = inv_g_dt;
+          W_values[6] = inv_g_dt;
+          W_values[7] = 0.0 - J_values[38];
+          W_values[8] = 0.0 - J_values[37];
+          W_values[9] = 0.0 - J_values[36];
+          W_values[10] = 0.0 - J_values[35];
+          W_values[11] = 0.0 - J_values[34];
+          W_values[12] = 0.0 - J_values[33];
+          W_values[13] = 0.0 - J_values[32];
+          W_values[14] = 0.0 - J_values[31];
+          W_values[15] = 0.0 - J_values[30];
+          W_values[16] = 0.0 - J_values[29];
+          W_values[17] = 0.0 - J_values[27];
+          W_values[18] = 0.0 - J_values[26];
+          W_values[19] = 0.0 - J_values[28];
+          W_values[20] = 0.0 - J_values[44];
+          W_values[21] = inv_g_dt - J_values[55];
+          W_values[22] = 0.0 - J_values[58];
+          W_values[23] = 0.0 - J_values[60];
+          W_values[24] = 0.0 - J_values[59];
+          W_values[25] = 0.0 - J_values[57];
+          W_values[26] = 0.0 - J_values[56];
+          W_values[27] = 0.0 - J_values[54];
+          W_values[28] = 0.0 - J_values[53];
+          W_values[29] = 0.0 - J_values[52];
+          W_values[30] = 0.0 - J_values[51];
+          W_values[31] = 0.0 - J_values[50];
+          W_values[32] = 0.0 - J_values[49];
+          W_values[33] = 0.0 - J_values[48];
+          W_values[34] = 0.0 - J_values[47];
+          W_values[35] = 0.0 - J_values[46];
+          W_values[36] = 0.0 - J_values[45];
+          W_values[37] = 0.0 - J_values[43];
+          W_values[38] = 0.0 - J_values[78];
+          W_values[39] = 0.0 - J_values[83];
+          W_values[40] = inv_g_dt - J_values[86];
+          W_values[41] = 0.0 - J_values[88];
+          W_values[42] = 0.0 - J_values[87];
+          W_values[43] = 0.0 - J_values[85];
+          W_values[44] = 0.0 - J_values[84];
+          W_values[45] = 0.0 - J_values[82];
+          W_values[46] = 0.0 - J_values[81];
+          W_values[47] = 0.0 - J_values[80];
+          W_values[48] = 0.0 - J_values[79];
+          W_values[49] = 0.0 - J_values[77];
+          W_values[50] = 0.0 - J_values[101];
+          W_values[51] = 0.0 - J_values[105];
+          W_values[52] = 0.0 - J_values[108];
+          W_values[53] = inv_g_dt - J_values[110];
+          W_values[54] = 0.0 - J_values[109];
+          W_values[55] = 0.0 - J_values[107];
+          W_values[56] = 0.0 - J_values[106];
+          W_values[57] = 0.0 - J_values[104];
+          W_values[58] = 0.0 - J_values[103];
+          W_values[59] = 0.0 - J_values[102];
+          W_values[60] = 0.0 - J_values[100];
+          W_values[61] = 0.0 - J_values[90];
+          W_values[62] = 0.0 - J_values[94];
+          W_values[63] = 0.0 - J_values[97];
+          W_values[64] = 0.0 - J_values[99];
+          W_values[65] = inv_g_dt - J_values[98];
+          W_values[66] = 0.0 - J_values[96];
+          W_values[67] = 0.0 - J_values[95];
+          W_values[68] = 0.0 - J_values[93];
+          W_values[69] = 0.0 - J_values[92];
+          W_values[70] = 0.0 - J_values[91];
+          W_values[71] = 0.0 - J_values[89];
+          W_values[72] = 0.0 - J_values[70];
+          W_values[73] = 0.0 - J_values[71];
+          W_values[74] = 0.0 - J_values[74];
+          W_values[75] = 0.0 - J_values[76];
+          W_values[76] = 0.0 - J_values[75];
+          W_values[77] = inv_g_dt - J_values[73];
+          W_values[78] = 0.0 - J_values[72];
+          W_values[79] = 0.0 - J_values[69];
+          W_values[80] = 0.0 - J_values[62];
+          W_values[81] = 0.0 - J_values[63];
+          W_values[82] = 0.0 - J_values[66];
+          W_values[83] = 0.0 - J_values[68];
+          W_values[84] = 0.0 - J_values[67];
+          W_values[85] = 0.0 - J_values[65];
+          W_values[86] = inv_g_dt - J_values[64];
+          W_values[87] = 0.0 - J_values[61];
+          W_values[88] = inv_g_dt;
+          W_values[89] = inv_g_dt;
+          W_values[90] = inv_g_dt;
+          W_values[91] = inv_g_dt;
+          W_values[92] = inv_g_dt;
+          W_values[93] = inv_g_dt;
+          W_values[94] = inv_g_dt;
+          W_values[95] = inv_g_dt;
+          W_values[96] = inv_g_dt;
+          W_values[97] = inv_g_dt;
+          W_values[98] = inv_g_dt - J_values[6];
+          W_values[99] = 0.0 - J_values[7];
+          W_values[100] = 0.0 - J_values[1];
+          W_values[101] = inv_g_dt - J_values[0];
+          W_values[102] = 0.0 - J_values[3];
+          W_values[103] = 0.0 - J_values[2];
+          W_values[104] = 0.0 - J_values[25];
+          W_values[105] = 0.0 - J_values[24];
+          W_values[106] = 0.0 - J_values[23];
+          W_values[107] = 0.0 - J_values[22];
+          W_values[108] = 0.0 - J_values[21];
+          W_values[109] = 0.0 - J_values[20];
+          W_values[110] = 0.0 - J_values[19];
+          W_values[111] = 0.0 - J_values[18];
+          W_values[112] = 0.0 - J_values[17];
+          W_values[113] = 0.0 - J_values[16];
+          W_values[114] = 0.0 - J_values[13];
+          W_values[115] = 0.0 - J_values[11];
+          W_values[116] = inv_g_dt - J_values[15];
+          W_values[117] = 0.0 - J_values[14];
+          W_values[118] = 0.0 - J_values[12];
+          W_values[119] = 0.0 - J_values[8];
+          W_values[120] = inv_g_dt - J_values[10];
+          W_values[121] = 0.0 - J_values[9];
+          W_values[122] = 0.0 - J_values[5];
+          W_values[123] = inv_g_dt - J_values[4];
+          double LU_values[177];
+          detail::factorize_plan(W_values, LU_values);
+#else
           double J_values[NUM_SPECIES * NUM_SPECIES] = {};
           auto jacobian_accessor = detail::make_stride_view<double, 2>(J_values, NUM_SPECIES, 1);
-          detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, temp, rh, clw);
+          detail::compute_jacobian_chunk_0(state_accessor, jacobian_accessor, jvals, temp, rh, clw, air_density);
           // Analytical Jacobian & Iteration Matrix W = inv_g_dt*I - J (sparse)
           double J_0_0 = J_values[8 * NUM_SPECIES + 8];
           double J_1_0 = J_values[9 * NUM_SPECIES + 8];
@@ -881,9 +1020,6 @@ namespace mkpp::generated::gocart {
           W_values[25 * NUM_SPECIES + 24] = -J_25_24;
           W_values[25 * NUM_SPECIES + 25] = inv_g_dt - J_25_25;
           double LU_values[NUM_SPECIES * NUM_SPECIES] = {};
-#ifndef MKPP_USE_UNROLLED_REFERENCE
-          detail::factorize_plan(W_values, LU_values);
-#else
           detail::factorize_lu_chunk_0(W_values, LU_values);
 #endif
 
@@ -891,7 +1027,7 @@ namespace mkpp::generated::gocart {
           // Rate evaluation F1 at S
           double F_values_1[NUM_SPECIES];
           auto rate_accessor_1 = detail::make_stride_view<double, 1>(F_values_1, 1);
-          detail::compute_rates_chunk_0(state_accessor, rate_accessor_1, jvals, temp, rh, clw);
+          detail::compute_rates_chunk_0(state_accessor, rate_accessor_1, jvals, temp, rh, clw, air_density);
           double F1_0 = F_values_1[8];
           double F1_1 = F_values_1[9];
           double F1_2 = F_values_1[6];
@@ -1037,7 +1173,7 @@ namespace mkpp::generated::gocart {
           double F_values_2[NUM_SPECIES];
           auto rate_accessor_2 = detail::make_stride_view<double, 1>(F_values_2, 1);
           auto stage_state_accessor_2 = detail::make_stride_view<double, 1>(stage_state_2, 1);
-          detail::compute_rates_chunk_0(stage_state_accessor_2, rate_accessor_2, jvals, temp, rh, clw);
+          detail::compute_rates_chunk_0(stage_state_accessor_2, rate_accessor_2, jvals, temp, rh, clw, air_density);
           double F2_0 = F_values_2[8];
           double F2_1 = F_values_2[9];
           double F2_2 = F_values_2[6];
@@ -1560,11 +1696,12 @@ namespace mkpp::generated::gocart {
 #ifdef MKPP_ENABLE_REDUCTION
       template <class StateView>
       KOKKOS_INLINE_FUNCTION void integrate_with_reduction(
-          double dt_total, StateView& state, Kokkos::View<const double*, memory_space> jvals_view, double importance_threshold, const double temp, const double rh, const double clw) const
+          double dt_total, StateView& state, Kokkos::View<const double*, memory_space> jvals_view, double importance_threshold, const double temp = 298.15, const double rh = 0.5, const double clw = 0.0, const double air_density = 2.46e+19) const
       {
           const double* jvals = jvals_view.data();
           const double Temp = temp;
           const double RH = rh;
+          const double AirDensity = air_density;
           (void)RH;  // Reserved for future deliquescence modeling
           const double CLW = clw;
           const int NUM_SPECIES = 26;
@@ -2753,12 +2890,13 @@ namespace mkpp::generated::gocart {
       template <class StateView>
       KOKKOS_INLINE_FUNCTION int integrate_fwd_checkpoint(
           double dt_total, StateView& state, Kokkos::View<const double*, memory_space> jvals_view,
-          CheckpointBuffer& chk, const double temp, const double rh, const double clw) const
+          CheckpointBuffer& chk, const double temp = 298.15, const double rh = 0.5, const double clw = 0.0, const double air_density = 2.46e+19) const
       {
           const double* jvals = jvals_view.data();
           const int NUM_SPECIES = 26;
           const double Temp = temp;
           const double RH = rh;
+          const double AirDensity = air_density;
           (void)RH;  // Reserved for future deliquescence modeling
           const double CLW = clw;
           // ROS-3 coefficients (3-stage, order 3)
@@ -4044,7 +4182,7 @@ namespace mkpp::generated::gocart {
       KOKKOS_INLINE_FUNCTION void integrate_adj(
           double dt_total, const StateView& state_final,
           AdjView& lambda, Kokkos::View<const double*, memory_space> jvals_view,
-          const CheckpointBuffer& chk, const double temp, const double rh, const double clw) const
+          const CheckpointBuffer& chk, const double temp = 298.15, const double rh = 0.5, const double clw = 0.0, const double air_density = 2.46e+19) const
       {
           const double* jvals = jvals_view.data();
           // Environment conditions must match the forward checkpoint so the
@@ -4052,6 +4190,7 @@ namespace mkpp::generated::gocart {
           // integrated under.
           const double Temp = temp;
           const double RH = rh;
+          const double AirDensity = air_density;
           (void)RH;  // Reserved for future deliquescence modeling
           const double CLW = clw;
           const double g = 0.435866521508459;
@@ -4959,7 +5098,7 @@ namespace mkpp::generated::gocart {
       KOKKOS_INLINE_FUNCTION void integrate_tlm(
           double dt_total, const StateView& state_0,
           PertView& delta_C, Kokkos::View<const double*, memory_space> jvals_view,
-          const CheckpointBuffer& chk, const double temp, const double rh, const double clw) const
+          const CheckpointBuffer& chk, const double temp = 298.15, const double rh = 0.5, const double clw = 0.0, const double air_density = 2.46e+19) const
       {
           const double* jvals = jvals_view.data();
           // Environment conditions must match the forward checkpoint so the
@@ -4967,6 +5106,7 @@ namespace mkpp::generated::gocart {
           // integrated under.
           const double Temp = temp;
           const double RH = rh;
+          const double AirDensity = air_density;
           (void)RH;  // Reserved for future deliquescence modeling
           const double CLW = clw;
           const double g = 0.435866521508459;

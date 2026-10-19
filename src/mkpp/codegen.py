@@ -26,7 +26,7 @@ from .template_context import build_template_context
 from .template_engine import TemplateEngine
 
 # Documented per-thread budget for the dense micro-matrix state (data-model E4, FR-007).
-# The integrator allocates three N x N double buffers per thread (J_values, W_values,
+# The reference integrator allocates three N x N double buffers (J_values, W_values,
 # LU_values). A mechanism whose footprint exceeds this budget must NOT keep them on the
 # per-thread stack for a device instantiation; the plan relocates them to team-scratch and
 # moves the symbolic L/U masks to device-accessible plan data. The budget is sized for the
@@ -41,19 +41,22 @@ def dense_matrix_bytes(num_species: int) -> int:
     return DENSE_MATRIX_BUFFERS * num_species * num_species * BYTES_PER_DOUBLE
 
 
-def per_thread_matrix_budget(num_species: int) -> dict:
+def per_thread_matrix_budget(num_species: int, compact_bytes: int | None = None) -> dict:
     """Evaluate the documented per-thread memory budget for a mechanism (data-model E4).
 
-    Returns a manifest-ready record describing the dense micro-matrix footprint and whether
+    Returns a manifest-ready record describing the selected numeric workspace and whether
     it exceeds the budget. Exceeding the budget emits a generation-time warning: the device
     instantiation must relocate {J,W,LU}_values to team-scratch and the L/U masks to a
     device-accessible View rather than per-thread stack arrays / per-TU inline masks.
     """
-    footprint = dense_matrix_bytes(num_species)
+    dense_footprint = dense_matrix_bytes(num_species)
+    footprint = dense_footprint if compact_bytes is None else compact_bytes
     exceeds = footprint > MAX_MATRIX_BYTES_PER_THREAD
     record = {
         "max_bytes_per_thread": MAX_MATRIX_BYTES_PER_THREAD,
-        "dense_matrix_bytes": footprint,
+        "dense_matrix_bytes": dense_footprint,
+        "numeric_matrix_bytes": footprint,
+        "storage": "dense-reference" if compact_bytes is None else "compact-sparse",
         "num_species": num_species,
         "buffers": DENSE_MATRIX_BUFFERS,
         "exceeds_budget": exceeds,
@@ -140,10 +143,10 @@ def generate_headers(
     context = build_template_context(mech, solver_name, adjoint=True, simd_backend=simd_backend)
     # Add suffix to context for filename generation
     context["suffix"] = suffix
-    # Documented per-thread dense micro-matrix budget (data-model E4, FR-007). Evaluated at
+    # Documented per-thread numeric matrix budget (data-model E4, FR-007). Evaluated at
     # generation time so a mechanism exceeding the budget surfaces a warning and a manifest
     # record driving the device team-scratch relocation plan (research R5).
-    budget_record = per_thread_matrix_budget(context["num_species"])
+    budget_record = per_thread_matrix_budget(context["num_species"], context["compact"]["numeric_bytes"])
     # The public header includes the reference factorization fragment only when
     # the unrolled-reference backend is emitted, keeping the default artifact
     # set free of the benchmark-only algebra.
@@ -163,13 +166,9 @@ def generate_headers(
     # implementation units under a mechanism-specific directory.
     compiled_path = out_path / f"{mech.name}{suffix}"
     compiled_path.mkdir(parents=True, exist_ok=True)
-    # The algebra for every detail:: helper is emitted ONCE as a
-    # KOKKOS_INLINE_FUNCTION definition fragment under the mechanism directory.
-    # The public header includes the fragments (so a device instantiation sees
-    # inline bodies for the whole call chain) and each compiled translation unit
-    # includes only its own fragment (so per-TU compile cost stays bounded and
-    # the static-library pathway keeps working). Host and device therefore
-    # share a single source of truth with no forked chemistry algebra.
+    # Emit one algebra definition shared by two build modes: CPU libraries own
+    # out-of-line helpers; device/header-only consumers see inline bodies. The
+    # CPU public header includes only declarations to bound optimizer work.
     # The layout-aware accessor is the shared vocabulary every chunk uses to
     # address caller-owned buffers and the integrator's local scratch arrays
     # with the correct strides (LayoutLeft cell rows are strided, not
@@ -178,6 +177,9 @@ def generate_headers(
     accessor_path = compiled_path / "accessor.hpp"
     with open(accessor_path, "w") as f:
         f.write(engine.render("device_impl/accessor.hpp.j2", context))
+
+    declarations_path = compiled_path / "host_declarations.hpp"
+    declarations_path.write_text(engine.render("host_declarations.hpp.j2", context), encoding="utf-8")
 
     for kernel in ("rates", "jacobian"):
         fragment_path = compiled_path / f"{kernel}.hpp"

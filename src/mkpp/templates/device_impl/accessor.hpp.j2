@@ -101,6 +101,15 @@ class StrideView<T, 2> {
     return data_[i * stride0_ + j * stride1_];
   }
 
+  KOKKOS_INLINE_FUNCTION static StrideView compact(T* data) {
+    StrideView result(data, 0, 0);
+    return result;
+  }
+
+  KOKKOS_INLINE_FUNCTION value_type& at_slot(std::size_t slot, std::size_t i, std::size_t j) const {
+    return stride0_ == 0 && stride1_ == 0 ? data_[slot] : (*this)(i, j);
+  }
+
   KOKKOS_INLINE_FUNCTION pointer_type data() const { return data_; }
   KOKKOS_INLINE_FUNCTION std::size_t stride(unsigned r) const { return r == 0 ? stride0_ : (r == 1 ? stride1_ : 1u); }
 
