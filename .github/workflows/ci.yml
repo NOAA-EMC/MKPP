@@ -154,6 +154,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Build CI Environment Image
         run: docker build -f .github/docker/Dockerfile.ci -t mkpp-ci-env:ci .
@@ -181,6 +183,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Build CI Environment Image
         run: docker build -f .github/docker/Dockerfile.ci -t mkpp-ci-env:ci .
