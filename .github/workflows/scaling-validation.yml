@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install Python build and test dependencies
-        run: python -m pip install -e '.[solver-comparison]' pytest numpy cmake ninja
+        run: python -m pip install -e '.[solver-comparison]' pytest hypothesis numpy cmake ninja
       - name: Build pinned Kokkos CPU backend
         run: |
           git clone --depth 1 --branch 5.1.1 https://github.com/kokkos/kokkos.git "$RUNNER_TEMP/kokkos"
