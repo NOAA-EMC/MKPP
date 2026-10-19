@@ -99,12 +99,16 @@ def main():
             r"jacobian\((\d+)\s*,\s*(\d+)\)\s*=\s*(.+?);",
             jac_body,
         )
+        matches_slots = re.findall(
+            r"jacobian\.at_slot\(\d+\s*,\s*(\d+)\s*,\s*(\d+)\)\s*=\s*(.+?);",
+            jac_body,
+        )
         matches_2d = re.findall(
             r"J_block\((?:Species::)?([a-zA-Z0-9_]+),\s*(?:Species::)?([a-zA-Z0-9_]+)\)\s*=\s*(.+?);",
             jac_body,
         )
 
-        if not matches_1d and not matches_2d and not matches_compiled and not matches_accessor:
+        if not matches_1d and not matches_2d and not matches_compiled and not matches_accessor and not matches_slots:
             print("No Jacobian block found in HPP!", file=sys.stderr)
             sys.exit(1)
 
@@ -116,6 +120,11 @@ def main():
                 computed_J[idx] = val
         elif matches_accessor:
             for row_str, col_str, eqn in matches_accessor:
+                idx = int(row_str) * num_species + int(col_str)
+                val = eval_jacobian_eqn(eqn, state_list, local_vars=local_vars)
+                computed_J[idx] = val
+        elif matches_slots:
+            for row_str, col_str, eqn in matches_slots:
                 idx = int(row_str) * num_species + int(col_str)
                 val = eval_jacobian_eqn(eqn, state_list, local_vars=local_vars)
                 computed_J[idx] = val
