@@ -9,7 +9,25 @@ EXAERO = ROOT / "src" / "exaero"
 
 
 def _source_files(root: Path) -> list[Path]:
-    return [*root.rglob("*.cpp"), *root.rglob("*.hpp"), *root.rglob("*.h")]
+    # Audit the auxiliary implementations, not their vendored dependencies
+    # (e.g. EX-aero's extern/mam4xx submodule). Those have independent
+    # portability policies and are not part of this device-callability gate.
+    return [
+        path
+        for pattern in ("*.cpp", "*.hpp", "*.h")
+        for path in root.rglob(pattern)
+        if "extern" not in path.relative_to(root).parts
+    ]
+
+
+def test_source_files_exclude_vendored_dependencies(tmp_path: Path) -> None:
+    owned = [tmp_path / "src" / "driver.cpp", tmp_path / "include" / "driver.hpp", tmp_path / "include" / "api.h"]
+    vendored = tmp_path / "extern" / "dependency" / "src" / "kernel.hpp"
+    for path in [*owned, vendored]:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("KOKKOS_INLINE_FUNCTION void kernel() { std::log(1.0); }")
+
+    assert set(_source_files(tmp_path)) == set(owned)
 
 
 def _annotated_bodies(source: str) -> list[str]:
