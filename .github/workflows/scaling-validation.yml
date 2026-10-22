@@ -18,7 +18,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install Python build and test dependencies
-        run: python -m pip install -e '.[solver-comparison]' pytest hypothesis numpy cmake ninja
+        # These tests exercise code generation and native cell scaling; they do
+        # not use the optional MUSICA comparison integration.
+        run: python -m pip install -e . pytest hypothesis numpy cmake ninja
       - name: Build pinned Kokkos CPU backend
         run: |
           git clone --depth 1 --branch 5.1.1 https://github.com/kokkos/kokkos.git "$RUNNER_TEMP/kokkos"
