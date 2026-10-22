@@ -6,7 +6,7 @@ endif()
 
 include("${CMAKE_SOURCE_DIR}/src/mkpp_host/cmake/MKPPCompiledMechanism.cmake")
 
-set(MECHS "chapman" "small_strato" "carbon" "ts1")
+set(MECHS "chapman" "small_strato" "carbon" "ts1" "cracmm2")
 
 foreach(MECH ${MECHS})
   string(TOUPPER "${MECH}" MECH_UPPER)
@@ -22,6 +22,8 @@ foreach(MECH ${MECHS})
     set(NUM_SPEC 82)
   elseif("${MECH}" STREQUAL "ts1")
     set(NUM_SPEC 210)
+  elseif("${MECH}" STREQUAL "cracmm2")
+    set(NUM_SPEC 271)
   else()
     set(NUM_SPEC 100)
   endif()
@@ -70,7 +72,8 @@ target_link_libraries(
           e2e_gocart_compiled_kernels
           e2e_saprc99_compiled_kernels
           e2e_saprcnov_compiled_kernels
-          e2e_saprc99_mini_compiled_kernels)
+          e2e_saprc99_mini_compiled_kernels
+          e2e_cracmm2_compiled_kernels)
 
 # SciPy reference validation test
 add_executable(test_scipy_validation test_scipy_validation.cpp)
