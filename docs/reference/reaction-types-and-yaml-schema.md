@@ -17,6 +17,8 @@ A mechanism YAML file consists of top-level metadata, species declarations, phas
 ```yaml
 name: mechanism_identifier
 description: Detailed description of chemical mechanism
+metadata:
+  rate_units: kinetic # kinetic (default) | SI
 species:
   - name: SpeciesName
     phase: gas # gas | aerosol | aqueous
@@ -38,6 +40,40 @@ reactions:
       SpeciesC: 1.0
     parameters:
       # Type-specific rate parameters
+```
+
+---
+
+### Mechanism Rate Units
+
+`metadata.rate_units` declares the source concentration units of stored mechanism rate coefficients. The accepted values are `kinetic` and `SI`, case-insensitively. If omitted, the mechanism uses `kinetic`, preserving the legacy convention. An SI declaration converts supported coefficients to the kinetic basis during parsing, before symbolic lowering; it does not change generated solver interfaces.
+
+For an evaluated coefficient multiplying concentration order $m$, MKPP converts SI to kinetic units using:
+
+$$
+k_{\mathrm{kinetic}} = k_{\mathrm{SI}} \left(\frac{N_A}{10^6}\right)^{1-m},
+\qquad \frac{N_A}{10^6} = 6.02214076 \times 10^{17}.
+$$
+
+| Rate family | Coefficient | Effective concentration order |
+|---|---|---|
+| `ARRHENIUS` | `A` | Sum of listed reactant exponents |
+| `TROE` / `FALLOFF` | low-pressure `k0.A` | Listed reactant order plus one for `[M]` |
+| `TROE` / `FALLOFF` | high-pressure `kinf.A` | Listed reactant order |
+| `EP2` | `A0`, `A2` | Listed reactant order |
+| `EP2` | `A3` | Listed reactant order plus one for `[M]` |
+| `EP3` | `A1` | Listed reactant order |
+| `EP3` | `A2` | Listed reactant order plus one for `[M]` |
+
+Temperature parameters and falloff broadening factors are unchanged. SI conversion requires finite numeric coefficients and nonnegative integral reactant exponents. Unsupported rate forms, including `TUNNELING`, and symbolic coefficients whose units cannot be determined are rejected before code generation with reaction context; a mechanism is never partially converted.
+
+Runtime concentrations, number densities (including `AIR`/`M`), emissions, temperature, photolysis values, and externally supplied `Rate_n` values remain in MKPP's existing kinetic basis. `PHOTOLYSIS`, `PHASE_CHANGE`, `USER_DEFINED`, and the current `SURFACE` lowering path use runtime forcings and are not coefficient-converted. `HETEROGENEOUS.gamma` is dimensionless and is not rescaled.
+
+Example SI declaration:
+
+```yaml
+metadata:
+  rate_units: SI
 ```
 
 ---

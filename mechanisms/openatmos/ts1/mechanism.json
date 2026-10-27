@@ -4,6 +4,7 @@
     "legacy_source": "ts1.yaml",
     "legacy_source_sha256": "52ec5a280f7d3f4d7765c3ffc4006f7c0eac450e6b0167802f950fc5ff161ce1",
     "migration": "legacy-mkpp-yaml-to-openatmos-v1",
+    "rate_units": "SI",
     "mkpp_mechanism_id": "ts1",
     "photolysis_host_forcing_expressions": {
       "j_ts1.yaml_0405": "1.0",

@@ -155,6 +155,7 @@ class MechanismDefinition:
     host_interface: Optional["HostInterfaceSchema"] = None
     units: str = "canonical"
     metadata: dict[str, str] = field(default_factory=dict)
+    source_rate_units: str = "kinetic"
     equilibrium_reactions: list[EquilibriumDefinition] = field(default_factory=list)
     # True when any kinetic reaction declares an `activation_trigger` naming a
     # runtime meteorological quantity (e.g. `meteo.cloud_liquid_water > 1e-6`).
