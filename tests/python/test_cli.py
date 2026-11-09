@@ -47,32 +47,6 @@ def test_cli_compile_success(tmp_path, capsys, monkeypatch):
     assert e.value.code == 0
 
 
-def test_cli_passes_si_kinetic_unit_conversion_flag(tmp_path, capsys, monkeypatch):
-    mech_file = tmp_path / "mech.yaml"
-    mech_file.write_text("""
-    species: [{name: O3}]
-    reactions: []
-    """)
-    test_env_file = tmp_path / "env.yaml"
-    test_env_file.write_text("mpi: {gather_to_root: false}")
-    observed = {}
-    monkeypatch.setattr("mkpp.cli.run_compiler", lambda *args, **kwargs: observed.update(kwargs))
-
-    with pytest.raises(SystemExit) as exc_info:
-        main(
-            [
-                "compile",
-                str(mech_file),
-                "--test-env",
-                str(test_env_file),
-                "--convert-kinetic-units-to-si",
-            ]
-        )
-
-    assert exc_info.value.code == 0
-    assert observed["convert_kinetic_units_to_si"] is True
-
-
 def test_cli_compile_fatal_error(capsys, monkeypatch, tmp_path):
     # Simulate a deep failure in the pipeline
     import json
@@ -202,7 +176,7 @@ def test_cli_dry_run_no_output_files(tmp_path, capsys, monkeypatch):
     mech_file = tmp_path / "mech.yaml"
     mech_file.write_text("species: [{name: O3}, {name: NO2}]\nreactions: []")
     env_file = tmp_path / "env.yaml"
-    env_file.write_text("mpi: {gather_to_root: false}")
+    env_file.write_text("mpi: {gather_to_root: false}\nenvironment: {air_density: 2.5e19}")
     out_dir = tmp_path / "output"
 
     monkeypatch.setattr(os, "getcwd", lambda: "/")
@@ -236,6 +210,7 @@ def test_cli_dry_run_no_output_files(tmp_path, capsys, monkeypatch):
         )
 
     assert e.value.code == 0
+    assert float(dummy_mech.metadata["air_density"]) == 2.5e19
     # generate_headers must not have been called
     assert generate_called == []
     # Output directory should not have been created

@@ -1,4 +1,5 @@
 import csv
+import json
 from pathlib import Path
 
 from scripts.import_cracmm2 import PHOTOLYSIS_RATE_NAMES, import_mechanism, rate_parameters
@@ -17,6 +18,7 @@ def test_complex_cracmm_rates_are_mapped_or_reported() -> None:
         mechanism_dir / "cracmm2_metadata.csv",
         mechanism_dir / "cracmm2_rxn_metadata.csv",
     )
+    assert mechanism == json.loads((mechanism_dir.parent / "mechanism.json").read_text(encoding="utf-8"))
     reactions = {reaction["name"]: reaction for reaction in mechanism["reactions"]}
 
     assert reactions["R045"]["type"] == "EP3"
@@ -79,7 +81,7 @@ def test_cracmm2_photolysis_rates_are_classified_and_named() -> None:
     assert all(reaction["name"].startswith("J_") for reaction in photolysis)
     assert all(reaction["A"] == reaction["name"] for reaction in photolysis)
     assert {reaction["name"] for reaction in photolysis} >= {"J_R001", "J_R014a", "J_TRP55", "J_TRP56", "J_T20"}
-    assert mechanism["concentration_unit"] == "molecule cm-3"
+    assert "concentration_unit" not in mechanism
     assert mechanism["metadata"]["photolysis_rate_source"].endswith("CSQY_DATA_cracmm2")
 
     with (mechanism_dir / "cracmm2_rxn_metadata.csv").open(newline="", encoding="utf-8") as stream:

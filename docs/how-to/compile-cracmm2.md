@@ -24,6 +24,10 @@ python3 scripts/import_cracmm2.py \
   --output mechanisms/openatmos/cracmm2/mechanism.json
 ```
 
+CRACMM2 uses MKPP's default kinetic units (`molecule cm-3`), so no unit
+declaration or rate-coefficient conversion is needed. Supply solver
+concentrations and air number density on this same basis.
+
 Compile the generated MKPP solver with the normal catalog command:
 
 ```bash

@@ -276,7 +276,6 @@ def import_mechanism(species_path: Path, reactions_path: Path) -> dict[str, obje
     return {
         "name": "cracmm2",
         "description": "Community Regional Atmospheric Chemistry Multiphase Mechanism CRACMM2 from USEPA.",
-        "concentration_unit": "molecule cm-3",
         "species": species,
         "phases": [{"name": "gas"}, {"name": "aerosol"}],
         "reactions": reactions,

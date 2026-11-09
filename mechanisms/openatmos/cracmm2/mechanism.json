@@ -1,7 +1,6 @@
 {
   "name": "cracmm2",
   "description": "Community Regional Atmospheric Chemistry Multiphase Mechanism CRACMM2 from USEPA.",
-  "concentration_unit": "molecule cm-3",
   "species": [
     {
       "name": "AAL",

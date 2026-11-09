@@ -44,11 +44,18 @@ def test_parse_complex_troe_parameters():
     assert mech.reactions[0].parameters["kinf"]["C"] == 6.0
 
 
-def test_convert_number_density_rate_constants_to_si():
+@pytest.mark.parametrize("file_format", ["json", "yaml"])
+def test_kinetic_rate_constants_are_preserved_without_unit_declaration(tmp_path, file_format):
     data = {
-        "concentration_unit": "molecule cm-3",
         "species": [{"name": name} for name in ("A", "B", "C", "M")],
         "reactions": [
+            {
+                "name": "first_order",
+                "type": "ARRHENIUS",
+                "reactants": {"A": 1.0},
+                "products": {"C": 1.0},
+                "A": 4.0,
+            },
             {
                 "name": "second_order",
                 "type": "ARRHENIUS",
@@ -71,44 +78,40 @@ def test_convert_number_density_rate_constants_to_si():
                 "k0": {"A": 4.0e-30, "B": 0.0, "C": 0.0},
                 "kinf": {"A": 5.0e-12, "B": 0.0, "C": 0.0},
             },
+            {
+                "type": "EP2",
+                "reactants": {"A": 1.0, "B": 1.0},
+                "products": {"C": 1.0},
+                "A0": 2.4e-14,
+                "A2": 2.7e-17,
+                "A3": 6.5e-34,
+            },
+            {
+                "type": "EP3",
+                "reactants": {"A": 1.0, "B": 1.0},
+                "products": {"C": 1.0},
+                "A1": 1.44e-13,
+                "A2": 3.43e-33,
+            },
+            {
+                "type": "PHOTOLYSIS",
+                "reactants": {"A": 1.0},
+                "products": {"C": 1.0},
+                "A": "J_A",
+            },
         ],
     }
-
-    mechanism = parse_mechanism_micm("number_density", data, convert_kinetic_units_to_si=True)
-    second_order_factor = (1.0e6 / 6.02214076e23) ** -1
-    third_order_factor = (1.0e6 / 6.02214076e23) ** -2
-
-    assert mechanism.concentration_unit == "mol m-3"
-    assert mechanism.kinetic_units_converted_to_si
-    assert mechanism.reactions[0].parameters["A"] == pytest.approx(2.0e-12 * second_order_factor)
-    assert mechanism.reactions[1].parameters["A"] == pytest.approx(3.0e-30 * third_order_factor)
-    assert mechanism.reactions[2].parameters["k0"]["A"] == pytest.approx(4.0e-30 * third_order_factor)
-    assert mechanism.reactions[2].parameters["kinf"]["A"] == pytest.approx(5.0e-12 * second_order_factor)
-
-
-def test_si_rate_constants_are_unchanged_when_si_conversion_requested():
-    mechanism = parse_mechanism_micm(
-        "si_units",
-        {
-            "concentration_unit": "mol m-3",
-            "species": [{"name": "A"}, {"name": "B"}],
-            "reactions": [{"type": "ARRHENIUS", "reactants": {"A": 1.0}, "products": {"B": 1.0}, "A": 4.0}],
-        },
-        convert_kinetic_units_to_si=True,
+    mechanism_path = tmp_path / f"mechanism.{file_format}"
+    mechanism_path.write_text(
+        json.dumps(data) if file_format == "json" else yaml.safe_dump(data),
+        encoding="utf-8",
     )
+    mechanism = load_mechanism(mechanism_path)
 
-    assert mechanism.concentration_unit == "mol m-3"
-    assert not mechanism.kinetic_units_converted_to_si
-    assert mechanism.reactions[0].parameters["A"] == 4.0
-
-
-def test_si_rate_conversion_requires_declared_concentration_units():
-    with pytest.raises(CompilationError, match="requires mechanism concentration_unit"):
-        parse_mechanism_micm(
-            "undeclared_units",
-            {"species": [{"name": "A"}], "reactions": []},
-            convert_kinetic_units_to_si=True,
-        )
+    assert len(mechanism.reactions) == len(data["reactions"])
+    for reaction, source in zip(mechanism.reactions, data["reactions"], strict=True):
+        assert reaction.parameters == {key: value for key, value in source.items() if key not in {"type", "reactants", "products"}}
+        assert reaction.rate_expression == str(source.get("A", ""))
 
 
 def test_openatmos_background_species_are_not_implicitly_fixed():
