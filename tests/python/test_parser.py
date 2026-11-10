@@ -2,6 +2,7 @@ import json
 import time
 
 import pytest
+import yaml
 from mkpp.model import CompilationError
 from mkpp.parser import (
     detect_config_format,
@@ -9,6 +10,15 @@ from mkpp.parser import (
     load_mechanism,
     parse_mechanism_micm,
 )
+
+
+@pytest.fixture(params=["SafeLoader", "CSafeLoader"])
+def safe_yaml_loader(request, monkeypatch):
+    """Exercise both safe YAML implementations when LibYAML is available."""
+    loader = getattr(yaml, request.param, None)
+    if loader is None:
+        pytest.skip("PyYAML was built without LibYAML")
+    monkeypatch.setattr("mkpp.parser._SAFE_YAML_LOADER", loader)
 
 
 def test_parse_complex_troe_parameters():
@@ -32,6 +42,76 @@ def test_parse_complex_troe_parameters():
     assert "k0" in mech.reactions[0].parameters
     assert mech.reactions[0].parameters["k0"]["A"] == 1.0
     assert mech.reactions[0].parameters["kinf"]["C"] == 6.0
+
+
+@pytest.mark.parametrize("file_format", ["json", "yaml"])
+def test_kinetic_rate_constants_are_preserved_without_unit_declaration(tmp_path, file_format):
+    data = {
+        "species": [{"name": name} for name in ("A", "B", "C", "M")],
+        "reactions": [
+            {
+                "name": "first_order",
+                "type": "ARRHENIUS",
+                "reactants": {"A": 1.0},
+                "products": {"C": 1.0},
+                "A": 4.0,
+            },
+            {
+                "name": "second_order",
+                "type": "ARRHENIUS",
+                "reactants": {"A": 1.0, "B": 1.0},
+                "products": {"C": 1.0},
+                "A": 2.0e-12,
+            },
+            {
+                "name": "third_order",
+                "type": "ARRHENIUS",
+                "reactants": {"A": 1.0, "B": 1.0, "M": 1.0},
+                "products": {"C": 1.0},
+                "A": 3.0e-30,
+            },
+            {
+                "name": "falloff",
+                "type": "TROE",
+                "reactants": {"A": 1.0, "B": 1.0},
+                "products": {"C": 1.0},
+                "k0": {"A": 4.0e-30, "B": 0.0, "C": 0.0},
+                "kinf": {"A": 5.0e-12, "B": 0.0, "C": 0.0},
+            },
+            {
+                "type": "EP2",
+                "reactants": {"A": 1.0, "B": 1.0},
+                "products": {"C": 1.0},
+                "A0": 2.4e-14,
+                "A2": 2.7e-17,
+                "A3": 6.5e-34,
+            },
+            {
+                "type": "EP3",
+                "reactants": {"A": 1.0, "B": 1.0},
+                "products": {"C": 1.0},
+                "A1": 1.44e-13,
+                "A2": 3.43e-33,
+            },
+            {
+                "type": "PHOTOLYSIS",
+                "reactants": {"A": 1.0},
+                "products": {"C": 1.0},
+                "A": "J_A",
+            },
+        ],
+    }
+    mechanism_path = tmp_path / f"mechanism.{file_format}"
+    mechanism_path.write_text(
+        json.dumps(data) if file_format == "json" else yaml.safe_dump(data),
+        encoding="utf-8",
+    )
+    mechanism = load_mechanism(mechanism_path)
+
+    assert len(mechanism.reactions) == len(data["reactions"])
+    for reaction, source in zip(mechanism.reactions, data["reactions"], strict=True):
+        assert reaction.parameters == {key: value for key, value in source.items() if key not in {"type", "reactants", "products"}}
+        assert reaction.rate_expression == str(source.get("A", ""))
 
 
 def test_openatmos_background_species_are_not_implicitly_fixed():
@@ -137,7 +217,7 @@ initial_concentrations:
     assert env.initial_concentrations["O3"] == 1e-6
 
 
-def test_load_mechanism_and_environment_json_parity(tmp_path):
+def test_load_mechanism_and_environment_json_parity(tmp_path, safe_yaml_loader):
     mech_dict = {
         "species": [{"name": "O3"}, {"name": "NO"}, {"name": "NO2"}],
         "reactions": [
@@ -165,8 +245,6 @@ def test_load_mechanism_and_environment_json_parity(tmp_path):
     yaml_env = tmp_path / "env.yaml"
     json_env = tmp_path / "env.json"
 
-    import yaml
-
     yaml_mech.write_text(yaml.dump(mech_dict))
     json_mech.write_text(json.dumps(mech_dict))
     yaml_env.write_text(yaml.dump(env_dict))
@@ -183,6 +261,20 @@ def test_load_mechanism_and_environment_json_parity(tmp_path):
     e_json = load_environment(json_env)
 
     assert e_yaml == e_json
+
+
+@pytest.mark.parametrize("load_config", [load_mechanism, load_environment])
+@pytest.mark.parametrize("document", ["species: [ unclosed_list", "!!python/object/apply:builtins.str [unsafe]"])
+def test_yaml_loaders_reject_invalid_documents(tmp_path, safe_yaml_loader, load_config, document):
+    config_path = tmp_path / "invalid.yaml"
+    config_path.write_text(document)
+
+    with pytest.raises(CompilationError) as exc_info:
+        load_config(config_path)
+
+    assert exc_info.value.stage == "parsing"
+    assert "YAML syntax error" in exc_info.value.message
+    assert exc_info.value.yaml_location.startswith(f"{config_path}:")
 
 
 def test_reject_invalid_or_legacy_formats(tmp_path):
@@ -235,8 +327,6 @@ def test_parser_performance_benchmark(tmp_path):
     yaml_path = tmp_path / "large_mech.yaml"
 
     json_path.write_text(json.dumps(mech_dict))
-    import yaml
-
     yaml_path.write_text(yaml.dump(mech_dict))
 
     # Time CPU rather than wall clock. This benchmark runs under pytest-xdist on

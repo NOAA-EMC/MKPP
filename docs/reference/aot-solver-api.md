@@ -312,6 +312,17 @@ mkpp compile <mechanism.yaml> --test-env <env.yaml> [options]
 | `--verbose` | flag | `false` | Emit progress logs to `stderr` at each compilation pipeline stage |
 | `--migrate-equilibrium` | flag | `false` | Rewrite mechanism YAML replacing deprecated `PHASE_CHANGE` blocks with `EQUILIBRIUM` |
 
+### Kinetic concentration units
+
+MKPP uses kinetic concentration units (`molecule cm-3`) by default and
+preserves kinetic rate coefficients as written. No unit declaration or
+conversion option is needed for mechanisms such as CRACMM2.
+For a reaction with total reactant molecularity $n$, its Arrhenius pre-factor
+`A` has units $[C]^{-(n-1)}\,s^{-1}$; first-order and photolysis rates are in
+$s^{-1}$. The concentration values passed to a generated solver must use the
+kinetic concentration basis, as must air number density and any
+concentration-dependent host inputs.
+
 ---
 
 ## 5. Supported Rosenbrock Solver Tableaus

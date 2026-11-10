@@ -1,0 +1,5 @@
+// Generated cracmm2 kernel definitions from the shared implementation.
+#if defined(MKPP_SEPARATE_HOST_KERNELS_CRACMM2)
+#define MKPP_DEFINE_HOST_KERNELS
+#endif
+#include "solve.hpp"

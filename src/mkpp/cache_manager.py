@@ -57,9 +57,10 @@ class CacheManager:
         except importlib.metadata.PackageNotFoundError:
             version = "dev"
         lowering_source = Path(__file__).parent / "lowering.py"
+        parser_source = Path(__file__).parent / "parser.py"
         codegen_source = Path(__file__).parent / "codegen.py"
         source_hash = b""
-        for src in (lowering_source, codegen_source):
+        for src in (lowering_source, parser_source, codegen_source):
             if src.exists():
                 source_hash += src.read_bytes()
         hash_input = file_bytes + version.encode() + sympy.__version__.encode() + source_hash
