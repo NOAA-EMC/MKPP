@@ -19,6 +19,8 @@ from .model import (
     SpeciesDefinition,
 )
 
+_SAFE_YAML_LOADER = yaml.CSafeLoader if yaml.__with_libyaml__ else yaml.SafeLoader
+
 
 def detect_config_format(source: str | Path) -> str:
     """Detect whether a configuration source is JSON or YAML.
@@ -199,7 +201,10 @@ def _normalize_si_rate_coefficients(reactions: list[ReactionDefinition]) -> list
 
 
 def parse_mechanism_micm(
-    name: str, data: dict[str, Any], *, convert_openatmos_activation_energy: bool = False
+    name: str,
+    data: dict[str, Any],
+    *,
+    convert_openatmos_activation_energy: bool = False,
 ) -> MechanismDefinition:
     """Parse MICM/OpenAtmos standard dictionary into internal model."""
     if not isinstance(data, dict) or "species" not in data or not data["species"]:
@@ -473,7 +478,7 @@ def load_mechanism(path: str | Path) -> MechanismDefinition:
             if fmt == "json":
                 data = json.load(f)
             else:
-                data = yaml.safe_load(f)
+                data = yaml.load(f, Loader=_SAFE_YAML_LOADER)
     except json.JSONDecodeError as e:
         raise CompilationError(
             stage="parsing",
@@ -506,7 +511,10 @@ def load_mechanism(path: str | Path) -> MechanismDefinition:
     # file stem.
     metadata = data.get("metadata", {})
     mechanism_id = metadata.get("mkpp_mechanism_id") if isinstance(metadata, dict) else None
-    return parse_mechanism_micm(str(mechanism_id or data.get("name", p.stem)), data)
+    return parse_mechanism_micm(
+        str(mechanism_id or data.get("name", p.stem)),
+        data,
+    )
 
 
 def load_environment(path: str | Path) -> EnvironmentDefinition:
@@ -521,7 +529,7 @@ def load_environment(path: str | Path) -> EnvironmentDefinition:
             if fmt == "json":
                 data = json.load(f)
             else:
-                data = yaml.safe_load(f)
+                data = yaml.load(f, Loader=_SAFE_YAML_LOADER)
     except json.JSONDecodeError as e:
         raise CompilationError(
             stage="parsing",
