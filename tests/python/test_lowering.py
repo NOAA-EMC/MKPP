@@ -1,3 +1,5 @@
+import copy
+
 import pytest
 from mkpp.lowering import partition_reactions, prepare_adjoint_and_tlm
 from mkpp.model import AerosolRepresentation, MechanismDefinition, ReactionDefinition
@@ -234,6 +236,180 @@ def test_troe_micm_sign_convention():
     ratio = k0 / kinf
     expected = k0 / (1.0 + ratio) * 0.6 ** (1.0 / (1.0 + sp.log(ratio, 10) ** 2))
     assert float(rate - expected) == pytest.approx(0.0, abs=1e-15)
+
+
+def test_omitted_and_explicit_kinetic_units_lower_to_identical_rates():
+    import sympy as sp
+    from mkpp.lowering import _evaluate_reaction_fluxes
+    from mkpp.parser import parse_mechanism_micm
+
+    mechanism_data = {
+        "species": [{"name": "A"}, {"name": "B"}],
+        "reactions": [
+            {
+                "type": "ARRHENIUS",
+                "reactants": {"A": 1},
+                "products": {"B": 1},
+                "A": 4.0e-12,
+                "B": 0.0,
+                "C": 0.0,
+            }
+        ],
+    }
+    default_mechanism = parse_mechanism_micm("default_kinetic", mechanism_data)
+    explicit_mechanism = parse_mechanism_micm(
+        "explicit_kinetic",
+        {**mechanism_data, "metadata": {"rate_units": "kinetic"}},
+    )
+
+    default_rate = _evaluate_reaction_fluxes(default_mechanism)["reaction_fluxes"][0]
+    explicit_rate = _evaluate_reaction_fluxes(explicit_mechanism)["reaction_fluxes"][0]
+
+    assert default_mechanism.source_rate_units == explicit_mechanism.source_rate_units == "kinetic"
+    assert sp.simplify(default_rate - explicit_rate) == 0
+
+
+@pytest.mark.parametrize(
+    ("reaction_type", "reactants", "parameters", "coefficient_orders"),
+    [
+        ("ARRHENIUS", {}, {"A": 2.0}, [("A", 0)]),
+        ("ARRHENIUS", {"A": 1}, {"A": 2.0}, [("A", 1)]),
+        ("ARRHENIUS", {"A": 1, "B": 1}, {"A": 2.0}, [("A", 2)]),
+        ("ARRHENIUS", {"A": 2, "B": 1}, {"A": 2.0}, [("A", 3)]),
+        (
+            "TROE",
+            {"A": 1, "B": 1},
+            {"k0": {"A": 2.0}, "kinf": {"A": 3.0}, "Fc": 0.6},
+            [("k0", "A", 3), ("kinf", "A", 2)],
+        ),
+        (
+            "FALLOFF",
+            {"A": 1},
+            {"k0_A": 2.0, "kinf_A": 3.0, "Fc": 0.6},
+            [("k0_A", 2), ("kinf_A", 1)],
+        ),
+        (
+            "TROE",
+            {"A": 1},
+            {"k0": {"A": 2.0}, "kinf_A": 3.0, "Fc": 0.6},
+            [("k0", "A", 2), ("kinf_A", 1)],
+        ),
+        (
+            "EP2",
+            {"A": 1, "B": 1},
+            {"A0": 2.0, "A2": 3.0, "A3": 4.0},
+            [("A0", 2), ("A2", 2), ("A3", 3)],
+        ),
+        (
+            "EP3",
+            {"A": 1, "B": 1},
+            {"A1": 2.0, "A2": 3.0},
+            [("A1", 2), ("A2", 3)],
+        ),
+    ],
+)
+def test_si_rate_coefficients_convert_and_preserve_physical_rate(reaction_type, reactants, parameters, coefficient_orders):
+    from mkpp.lowering import _evaluate_reaction_fluxes
+    from mkpp.parser import parse_mechanism_micm
+
+    molecules_per_mol_m3 = 6.02214076e17
+    reaction = {
+        "type": reaction_type,
+        "reactants": reactants,
+        "products": {"C": 1},
+        **parameters,
+    }
+    mechanism_data = {
+        "metadata": {"rate_units": "SI"},
+        "species": [{"name": name} for name in ("A", "B", "C", "M")],
+        "reactions": [reaction],
+    }
+    kinetic_data = copy.deepcopy(mechanism_data)
+    kinetic_data["metadata"]["rate_units"] = "kinetic"
+    original_si_data = copy.deepcopy(mechanism_data)
+
+    for item in coefficient_orders:
+        if len(item) == 2:
+            path, order = item
+            si_value = reaction[path]
+            kinetic_data["reactions"][0][path] = si_value * molecules_per_mol_m3 ** (1 - order)
+        else:
+            parent, path, order = item
+            si_value = reaction[parent][path]
+            kinetic_data["reactions"][0][parent][path] = si_value * molecules_per_mol_m3 ** (1 - order)
+
+    si_mechanism = parse_mechanism_micm("si_rate", mechanism_data)
+    kinetic_mechanism = parse_mechanism_micm("kinetic_rate", kinetic_data)
+    assert mechanism_data == original_si_data
+
+    for item in coefficient_orders:
+        if len(item) == 2:
+            path, order = item
+            converted = si_mechanism.reactions[0].parameters[path]
+            source_value = reaction[path]
+        else:
+            parent, path, order = item
+            converted = si_mechanism.reactions[0].parameters[parent][path]
+            source_value = reaction[parent][path]
+        assert converted == pytest.approx(source_value * molecules_per_mol_m3 ** (1 - order), rel=1e-14, abs=0.0)
+
+    si_flux = _evaluate_reaction_fluxes(si_mechanism)["reaction_fluxes"][0]
+    kinetic_flux = _evaluate_reaction_fluxes(kinetic_mechanism)["reaction_fluxes"][0]
+    substitutions = {
+        symbol: {
+            "Temp": 300.0,
+            "C_A": 2.0e12,
+            "C_B": 3.0e12,
+            "C_C": 4.0e12,
+            "C_M": 2.4e19,
+        }[symbol.name]
+        for symbol in si_flux.free_symbols
+    }
+    si_rate = float(si_flux.subs(substitutions).evalf())
+    kinetic_rate = float(kinetic_flux.subs(substitutions).evalf())
+    assert si_mechanism.source_rate_units == "SI"
+    assert si_rate == pytest.approx(kinetic_rate, rel=1e-12, abs=1e-30)
+
+
+@pytest.mark.parametrize(
+    ("reaction", "expected_rate_symbol"),
+    [
+        ({"type": "PHOTOLYSIS", "reactants": {"A": 1}, "products": {"B": 1}}, "J_0"),
+        ({"type": "PHASE_CHANGE", "reactants": {"A": 1}, "products": {"B": 1}}, "Rate_0"),
+        ({"type": "USER_DEFINED", "reactants": {"A": 1}, "products": {"B": 1}}, "Rate_0"),
+        (
+            {
+                "type": "SURFACE",
+                "gas-phase species": "A",
+                "gas-phase products": [{"species name": "B"}],
+                "reaction probability": 0.1,
+            },
+            "Rate_0",
+        ),
+    ],
+)
+def test_si_mechanism_preserves_runtime_rate_forcings(reaction, expected_rate_symbol):
+    from mkpp.lowering import _evaluate_reaction_fluxes
+    from mkpp.parser import parse_mechanism_micm
+
+    mechanism_data = {
+        "species": [{"name": name} for name in ("A", "B")],
+        "reactions": [reaction],
+    }
+    si_mechanism = parse_mechanism_micm(
+        "runtime_forcing_si",
+        {**mechanism_data, "metadata": {"rate_units": "SI"}},
+    )
+    kinetic_mechanism = parse_mechanism_micm(
+        "runtime_forcing_kinetic",
+        {**mechanism_data, "metadata": {"rate_units": "kinetic"}},
+    )
+
+    si_flux = _evaluate_reaction_fluxes(si_mechanism)["reaction_fluxes"][0]
+    kinetic_flux = _evaluate_reaction_fluxes(kinetic_mechanism)["reaction_fluxes"][0]
+
+    assert expected_rate_symbol in {symbol.name for symbol in si_flux.free_symbols}
+    assert si_flux == kinetic_flux
 
 
 def test_rate_vector_hoisting():
